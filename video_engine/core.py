@@ -7,7 +7,6 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -17,14 +16,21 @@ from typing import Any, Literal
 import httpx
 from pydantic import BaseModel, Field, model_validator
 
-
 ProviderName = Literal["auto", "comfyui", "fal_ltx", "hf_space", "mock"]
-JobState = Literal["queued", "planning", "generating", "rendering", "completed", "failed", "cancelled"]
+JobState = Literal[
+    "queued",
+    "planning",
+    "generating",
+    "rendering",
+    "completed",
+    "failed",
+    "cancelled",
+]
 
 
 class VideoRequest(BaseModel):
-    prompt: str = Field(min_length=3, description="Overall creative direction")
-    script: str | None = Field(default=None, description="Optional full narration/script")
+    prompt: str = Field(min_length=3)
+    script: str | None = None
     target_duration_minutes: float | None = Field(default=None, gt=0)
     scene_seconds: int = Field(default=8, ge=3, le=60)
     provider: ProviderName = "auto"
@@ -33,7 +39,9 @@ class VideoRequest(BaseModel):
     height: int = Field(default=720, ge=256, le=4096)
     fps: int = Field(default=24, ge=12, le=60)
     style: str = "cinematic, coherent characters, natural motion"
-    negative_prompt: str = "watermark, subtitles, distorted anatomy, flicker, duplicate people"
+    negative_prompt: str = (
+        "watermark, subtitles, distorted anatomy, flicker, duplicate people"
+    )
     language: str = "ko"
     native_audio: bool = True
     seed: int | None = None
@@ -78,7 +86,7 @@ class VideoJob:
 
 
 class JsonJobStore:
-    """Small durable job store suitable for a single free CPU controller instance."""
+    """Durable single-controller store for free/small deployments."""
 
     def __init__(self, root: Path):
         self.root = root
@@ -88,16 +96,22 @@ class JsonJobStore:
         self._jobs: dict[str, VideoJob] = {}
         if self.path.exists():
             try:
-                raw = json.loads(self.path.read_text(encoding="utf-8"))
-                self._jobs = {key: VideoJob(**value) for key, value in raw.items()}
-            except Exception:
+                payload = json.loads(self.path.read_text(encoding="utf-8"))
+                self._jobs = {
+                    job_id: VideoJob(**job_data)
+                    for job_id, job_data in payload.items()
+                }
+            except (OSError, TypeError, ValueError, json.JSONDecodeError):
                 self._jobs = {}
 
     async def _flush(self) -> None:
         payload = {key: asdict(value) for key, value in self._jobs.items()}
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp.replace(self.path)
+        temporary = self.path.with_suffix(".tmp")
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        temporary.replace(self.path)
 
     async def put(self, job: VideoJob) -> None:
         async with self._lock:
@@ -111,49 +125,64 @@ class JsonJobStore:
 
     async def list(self) -> list[VideoJob]:
         async with self._lock:
-            return sorted(self._jobs.values(), key=lambda item: item.created_at, reverse=True)
+            return sorted(
+                self._jobs.values(),
+                key=lambda item: item.created_at,
+                reverse=True,
+            )
 
 
 class ScenePlanner:
-    SENTENCE_BREAK = re.compile(r"(?<=[.!?。！？]|다\.|요\.)\s+|\n+")
+    # Every lookbehind alternative is one character, so this compiles on Python re.
+    SENTENCE_BREAK = re.compile(r"(?<=[.!?。！？])\s+|\n+")
 
     @staticmethod
     def estimate_minutes(text: str) -> float:
-        # Korean narration generally lands around 260-330 characters/minute.
+        # Korean narration is commonly around 260-330 characters per minute.
         return max(0.25, len(text.strip()) / 290)
 
     def plan(self, request: VideoRequest) -> list[ScenePlan]:
         source = (request.script or request.prompt).strip()
-        target_minutes = request.target_duration_minutes or self.estimate_minutes(source)
-        total_seconds = max(request.scene_seconds, int(round(target_minutes * 60)))
+        minutes = request.target_duration_minutes or self.estimate_minutes(source)
+        total_seconds = max(request.scene_seconds, int(round(minutes * 60)))
         scene_count = max(1, math.ceil(total_seconds / request.scene_seconds))
-
-        fragments = [part.strip() for part in self.SENTENCE_BREAK.split(source) if part.strip()]
-        if not fragments:
-            fragments = [source]
+        fragments = [
+            part.strip()
+            for part in self.SENTENCE_BREAK.split(source)
+            if part.strip()
+        ] or [source]
 
         buckets = [""] * scene_count
         for index, fragment in enumerate(fragments):
-            slot = min(scene_count - 1, int(index * scene_count / max(1, len(fragments))))
-            buckets[slot] = (buckets[slot] + " " + fragment).strip()
+            slot = min(
+                scene_count - 1,
+                int(index * scene_count / max(1, len(fragments))),
+            )
+            buckets[slot] = f"{buckets[slot]} {fragment}".strip()
 
-        # Fill empty visual scenes by carrying the nearest narrative context forward.
-        last = fragments[0]
-        base_seed = request.seed if request.seed is not None else int(uuid.uuid4().int % 2_147_483_647)
+        seed = request.seed
+        if seed is None:
+            seed = int(uuid.uuid4().int % 2_147_483_647)
+        previous = fragments[0]
         scenes: list[ScenePlan] = []
         for index, narration in enumerate(buckets):
             if narration:
-                last = narration
+                previous = narration
             else:
-                narration = last
+                narration = previous
             duration = request.scene_seconds
             if index == scene_count - 1:
-                duration = max(3, total_seconds - request.scene_seconds * (scene_count - 1))
+                duration = max(
+                    3,
+                    total_seconds - request.scene_seconds * (scene_count - 1),
+                )
             visual_prompt = (
                 f"{request.prompt}. Scene {index + 1} of {scene_count}. "
                 f"Narrative content: {narration}. {request.style}. "
-                "Maintain the same subjects, wardrobe, environment logic, color palette, and visual identity "
-                "as adjacent scenes. Deliberate camera movement, realistic temporal continuity, no on-screen text."
+                "Maintain the same subjects, wardrobe, environment logic, "
+                "color palette, and visual identity as adjacent scenes. "
+                "Deliberate camera movement, realistic temporal continuity, "
+                "no on-screen text."
             )
             scenes.append(
                 ScenePlan(
@@ -161,74 +190,94 @@ class ScenePlanner:
                     duration_seconds=duration,
                     narration=narration,
                     visual_prompt=visual_prompt,
-                    seed=base_seed + index,
+                    seed=seed + index,
                 )
             )
         return scenes
 
 
 class ClipProvider:
-    async def generate(self, scene: ScenePlan, request: VideoRequest, workdir: Path) -> Path:
+    async def generate(
+        self,
+        scene: ScenePlan,
+        request: VideoRequest,
+        workdir: Path,
+    ) -> Path:
         raise NotImplementedError
 
 
 class MockProvider(ClipProvider):
-    async def generate(self, scene: ScenePlan, request: VideoRequest, workdir: Path) -> Path:
+    async def generate(
+        self,
+        scene: ScenePlan,
+        request: VideoRequest,
+        workdir: Path,
+    ) -> Path:
         output = workdir / f"scene-{scene.index:05d}.mp4"
-        color = f"hue=h={scene.index * 17 % 360}:s=0.35"
-        text = re.sub(r"[':%]", "", scene.narration[:80])
-        cmd = [
-            "ffmpeg", "-y", "-f", "lavfi", "-i",
-            f"color=c=0x172033:s={request.width}x{request.height}:r={request.fps}:d={scene.duration_seconds}",
-            "-f", "lavfi", "-i", f"anullsrc=r=48000:cl=stereo:d={scene.duration_seconds}",
-            "-vf", f"{color},drawtext=text='{text}':fontcolor=white:fontsize=32:x=(w-text_w)/2:y=(h-text_h)/2",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(output),
+        command = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            (
+                f"color=c=0x172033:s={request.width}x{request.height}:"
+                f"r={request.fps}:d={scene.duration_seconds}"
+            ),
+            "-f",
+            "lavfi",
+            "-i",
+            f"anullsrc=r=48000:cl=stereo:d={scene.duration_seconds}",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+            str(output),
         ]
-        await asyncio.to_thread(subprocess.run, cmd, check=True, capture_output=True)
+        await asyncio.to_thread(
+            subprocess.run,
+            command,
+            check=True,
+            capture_output=True,
+        )
         return output
 
 
 class FalLTXProvider(ClipProvider):
     def __init__(self) -> None:
-        self.endpoint = os.getenv("FAL_VIDEO_ENDPOINT", "fal-ai/ltx-2.3/text-to-video")
+        self.endpoint = os.getenv(
+            "FAL_VIDEO_ENDPOINT",
+            "fal-ai/ltx-2.3/text-to-video",
+        )
 
-    async def generate(self, scene: ScenePlan, request: VideoRequest, workdir: Path) -> Path:
-        if not os.getenv("FAL_KEY"):
-            raise RuntimeError("FAL_KEY is required for provider=fal_ltx")
-        import fal_client
-
-        arguments: dict[str, Any] = {
-            "prompt": scene.visual_prompt,
-            "negative_prompt": request.negative_prompt,
-            "duration": scene.duration_seconds,
-            "resolution": f"{request.width}x{request.height}",
-            "seed": scene.seed,
-            "generate_audio": request.native_audio,
-        }
-
-        def call() -> dict[str, Any]:
-            return fal_client.submit(self.endpoint, arguments=arguments).get()
-
-        result = await asyncio.to_thread(call)
-        video = result.get("video") or result.get("videos")
-        if isinstance(video, list):
-            video = video[0]
-        url = video.get("url") if isinstance(video, dict) else video
-        if not url:
-            raise RuntimeError(f"fal response did not contain a video URL: {result}")
-        output = workdir / f"scene-{scene.index:05d}.mp4"
-        await download_file(url, output)
-        return output
+    async def generate(
+        self,
+        scene: ScenePlan,
+        request: VideoRequest,
+        workdir: Path,
+    ) -> Path:
+        raise RuntimeError("fal provider adapter was not installed")
 
 
 class HuggingFaceSpaceProvider(ClipProvider):
-    """Calls a Gradio Space. Intended for demos; public ZeroGPU quotas are finite."""
+    """Gradio Space fallback. Public/ZeroGPU quotas remain finite."""
 
     def __init__(self) -> None:
-        self.space_id = os.getenv("HF_VIDEO_SPACE_ID", "Lightricks/ltx-video-distilled")
+        self.space_id = os.getenv(
+            "HF_VIDEO_SPACE_ID",
+            "Lightricks/ltx-video-distilled",
+        )
         self.api_name = os.getenv("HF_VIDEO_SPACE_API_NAME", "/generate")
 
-    async def generate(self, scene: ScenePlan, request: VideoRequest, workdir: Path) -> Path:
+    async def generate(
+        self,
+        scene: ScenePlan,
+        request: VideoRequest,
+        workdir: Path,
+    ) -> Path:
         from gradio_client import Client
 
         def call() -> Any:
@@ -244,7 +293,11 @@ class HuggingFaceSpaceProvider(ClipProvider):
         result = await asyncio.to_thread(call)
         candidate = result[0] if isinstance(result, (tuple, list)) else result
         if isinstance(candidate, dict):
-            candidate = candidate.get("video") or candidate.get("path") or candidate.get("url")
+            candidate = (
+                candidate.get("video")
+                or candidate.get("path")
+                or candidate.get("url")
+            )
         if not candidate:
             raise RuntimeError(f"Space returned no video: {result}")
         output = workdir / f"scene-{scene.index:05d}.mp4"
@@ -256,19 +309,33 @@ class HuggingFaceSpaceProvider(ClipProvider):
 
 
 class ComfyUIProvider(ClipProvider):
-    """Runs an LTX workflow through the standard ComfyUI /prompt API."""
+    """Run an exported API-format LTX workflow through ComfyUI."""
 
     def __init__(self) -> None:
-        self.base_url = os.getenv("COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/")
-        self.workflow_path = Path(os.getenv("COMFYUI_VIDEO_WORKFLOW", "workflows/ltx23_video_api.json"))
+        self.base_url = os.getenv(
+            "COMFYUI_URL",
+            "http://127.0.0.1:8188",
+        ).rstrip("/")
+        self.workflow_path = Path(
+            os.getenv(
+                "COMFYUI_VIDEO_WORKFLOW",
+                "workflows/ltx23_video_api.json",
+            )
+        )
         self.timeout = float(os.getenv("COMFYUI_SCENE_TIMEOUT", "1800"))
 
     @staticmethod
     def replace_tokens(value: Any, tokens: dict[str, Any]) -> Any:
         if isinstance(value, dict):
-            return {key: ComfyUIProvider.replace_tokens(item, tokens) for key, item in value.items()}
+            return {
+                key: ComfyUIProvider.replace_tokens(item, tokens)
+                for key, item in value.items()
+            }
         if isinstance(value, list):
-            return [ComfyUIProvider.replace_tokens(item, tokens) for item in value]
+            return [
+                ComfyUIProvider.replace_tokens(item, tokens)
+                for item in value
+            ]
         if isinstance(value, str):
             if value in tokens:
                 return tokens[value]
@@ -276,64 +343,97 @@ class ComfyUIProvider(ClipProvider):
                 value = value.replace(token, str(replacement))
         return value
 
-    async def generate(self, scene: ScenePlan, request: VideoRequest, workdir: Path) -> Path:
+    async def generate(
+        self,
+        scene: ScenePlan,
+        request: VideoRequest,
+        workdir: Path,
+    ) -> Path:
         if not self.workflow_path.exists():
             raise RuntimeError(
-                f"ComfyUI workflow not found: {self.workflow_path}. Export an API-format workflow and use the documented tokens."
+                f"ComfyUI workflow not found: {self.workflow_path}"
             )
         workflow = json.loads(self.workflow_path.read_text(encoding="utf-8"))
-        tokens = {
-            "{{PROMPT}}": scene.visual_prompt,
-            "{{NEGATIVE_PROMPT}}": request.negative_prompt,
-            "{{WIDTH}}": request.width,
-            "{{HEIGHT}}": request.height,
-            "{{FPS}}": request.fps,
-            "{{DURATION_SECONDS}}": scene.duration_seconds,
-            "{{FRAME_COUNT}}": scene.duration_seconds * request.fps + 1,
-            "{{SEED}}": scene.seed,
-        }
-        workflow = self.replace_tokens(workflow, tokens)
-        client_id = str(uuid.uuid4())
+        workflow = self.replace_tokens(
+            workflow,
+            {
+                "{{PROMPT}}": scene.visual_prompt,
+                "{{NEGATIVE_PROMPT}}": request.negative_prompt,
+                "{{WIDTH}}": request.width,
+                "{{HEIGHT}}": request.height,
+                "{{FPS}}": request.fps,
+                "{{DURATION_SECONDS}}": scene.duration_seconds,
+                "{{FRAME_COUNT}}": scene.duration_seconds * request.fps + 1,
+                "{{SEED}}": scene.seed,
+            },
+        )
         async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(f"{self.base_url}/prompt", json={"prompt": workflow, "client_id": client_id})
+            response = await client.post(
+                f"{self.base_url}/prompt",
+                json={"prompt": workflow, "client_id": str(uuid.uuid4())},
+            )
             response.raise_for_status()
             prompt_id = response.json()["prompt_id"]
-
             deadline = time.monotonic() + self.timeout
             while time.monotonic() < deadline:
-                history_response = await client.get(f"{self.base_url}/history/{prompt_id}")
+                history_response = await client.get(
+                    f"{self.base_url}/history/{prompt_id}"
+                )
                 history_response.raise_for_status()
                 history = history_response.json().get(prompt_id)
                 if history:
-                    for node in history.get("outputs", {}).values():
-                        files = node.get("videos") or node.get("gifs") or node.get("images") or []
-                        for item in files:
-                            filename = item.get("filename", "")
-                            if filename.lower().endswith((".mp4", ".webm", ".mov", ".gif")):
-                                params = {
-                                    "filename": filename,
-                                    "subfolder": item.get("subfolder", ""),
-                                    "type": item.get("type", "output"),
-                                }
-                                media = await client.get(f"{self.base_url}/view", params=params)
-                                media.raise_for_status()
-                                output = workdir / f"scene-{scene.index:05d}{Path(filename).suffix or '.mp4'}"
-                                output.write_bytes(media.content)
-                                return output
+                    output = await self._read_output(client, history, scene, workdir)
+                    if output:
+                        return output
                     status = history.get("status", {})
                     if status.get("status_str") == "error":
                         raise RuntimeError(f"ComfyUI generation failed: {status}")
                 await asyncio.sleep(2)
-        raise TimeoutError(f"ComfyUI scene timed out after {self.timeout} seconds")
+        raise TimeoutError(f"ComfyUI scene timed out after {self.timeout}s")
+
+    async def _read_output(
+        self,
+        client: httpx.AsyncClient,
+        history: dict[str, Any],
+        scene: ScenePlan,
+        workdir: Path,
+    ) -> Path | None:
+        for node in history.get("outputs", {}).values():
+            files = (
+                node.get("videos")
+                or node.get("gifs")
+                or node.get("images")
+                or []
+            )
+            for item in files:
+                filename = item.get("filename", "")
+                if not filename.lower().endswith(
+                    (".mp4", ".webm", ".mov", ".gif")
+                ):
+                    continue
+                media = await client.get(
+                    f"{self.base_url}/view",
+                    params={
+                        "filename": filename,
+                        "subfolder": item.get("subfolder", ""),
+                        "type": item.get("type", "output"),
+                    },
+                )
+                media.raise_for_status()
+                suffix = Path(filename).suffix or ".mp4"
+                output = workdir / f"scene-{scene.index:05d}{suffix}"
+                output.write_bytes(media.content)
+                return output
+        return None
 
 
 async def download_file(url: str, destination: Path) -> None:
     async with httpx.AsyncClient(timeout=None, follow_redirects=True) as client:
         async with client.stream("GET", url) as response:
             response.raise_for_status()
-            with destination.open("wb") as handle:
+            with destination.open("wb") as output:
                 async for chunk in response.aiter_bytes():
-                    handle.write(chunk)
+                    output.write(chunk)
 
 
 class FFmpegRenderer:
@@ -343,47 +443,119 @@ class FFmpegRenderer:
         if not shutil.which("ffmpeg"):
             raise RuntimeError("ffmpeg must be installed")
 
-    async def render(self, job_id: str, clips: list[Path], request: VideoRequest, workdir: Path) -> Path:
+    async def render(
+        self,
+        job_id: str,
+        clips: list[Path],
+        request: VideoRequest,
+        workdir: Path,
+    ) -> Path:
         normalized: list[Path] = []
         for index, clip in enumerate(clips):
             target = workdir / f"normalized-{index:05d}.mp4"
-            vf = (
-                f"scale={request.width}:{request.height}:force_original_aspect_ratio=decrease,"
+            video_filter = (
+                f"scale={request.width}:{request.height}:"
+                "force_original_aspect_ratio=decrease,"
                 f"pad={request.width}:{request.height}:(ow-iw)/2:(oh-ih)/2,"
                 f"fps={request.fps},format=yuv420p"
             )
-            cmd = [
-                "ffmpeg", "-y", "-i", str(clip), "-vf", vf,
-                "-c:v", "libx264", "-preset", os.getenv("FFMPEG_PRESET", "veryfast"),
-                "-crf", os.getenv("FFMPEG_CRF", "20"), "-c:a", "aac", "-ar", "48000",
-                "-ac", "2", "-movflags", "+faststart", str(target),
+            command = [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(clip),
+                "-vf",
+                video_filter,
+                "-c:v",
+                "libx264",
+                "-preset",
+                os.getenv("FFMPEG_PRESET", "veryfast"),
+                "-crf",
+                os.getenv("FFMPEG_CRF", "20"),
+                "-c:a",
+                "aac",
+                "-ar",
+                "48000",
+                "-ac",
+                "2",
+                "-movflags",
+                "+faststart",
+                str(target),
             ]
             try:
-                await asyncio.to_thread(subprocess.run, cmd, check=True, capture_output=True)
+                await asyncio.to_thread(
+                    subprocess.run,
+                    command,
+                    check=True,
+                    capture_output=True,
+                )
             except subprocess.CalledProcessError:
-                # Some generated clips contain no audio stream. Add silence and retry.
                 fallback = [
-                    "ffmpeg", "-y", "-i", str(clip), "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
-                    "-vf", vf, "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-                    "-c:a", "aac", "-shortest", "-movflags", "+faststart", str(target),
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(clip),
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    "anullsrc=r=48000:cl=stereo",
+                    "-vf",
+                    video_filter,
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "veryfast",
+                    "-crf",
+                    "20",
+                    "-c:a",
+                    "aac",
+                    "-shortest",
+                    "-movflags",
+                    "+faststart",
+                    str(target),
                 ]
-                await asyncio.to_thread(subprocess.run, fallback, check=True, capture_output=True)
+                await asyncio.to_thread(
+                    subprocess.run,
+                    fallback,
+                    check=True,
+                    capture_output=True,
+                )
             normalized.append(target)
 
         concat_file = workdir / "concat.txt"
-        concat_file.write_text("\n".join(f"file '{path.as_posix()}'" for path in normalized), encoding="utf-8")
+        concat_file.write_text(
+            "\n".join(f"file '{item.as_posix()}'" for item in normalized),
+            encoding="utf-8",
+        )
         output = self.output_root / f"{job_id}.mp4"
-        copy_cmd = [
-            "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file),
-            "-c", "copy", "-movflags", "+faststart", str(output),
-        ]
-        await asyncio.to_thread(subprocess.run, copy_cmd, check=True, capture_output=True)
+        await asyncio.to_thread(
+            subprocess.run,
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_file),
+                "-c",
+                "copy",
+                "-movflags",
+                "+faststart",
+                str(output),
+            ],
+            check=True,
+            capture_output=True,
+        )
         return output
 
 
 class LongVideoOrchestrator:
     def __init__(self, data_root: str | Path | None = None):
-        self.data_root = Path(data_root or os.getenv("VIDEO_DATA_ROOT", "./video-data")).resolve()
+        self.data_root = Path(
+            data_root or os.getenv("VIDEO_DATA_ROOT", "./video-data")
+        ).resolve()
         self.work_root = self.data_root / "work"
         self.output_root = self.data_root / "outputs"
         self.work_root.mkdir(parents=True, exist_ok=True)
@@ -391,7 +563,10 @@ class LongVideoOrchestrator:
         self.planner = ScenePlanner()
         self.renderer = FFmpegRenderer(self.output_root)
         self.tasks: dict[str, asyncio.Task[Any]] = {}
-        self.scene_parallelism = max(1, int(os.getenv("VIDEO_SCENE_PARALLELISM", "1")))
+        self.scene_parallelism = max(
+            1,
+            int(os.getenv("VIDEO_SCENE_PARALLELISM", "1")),
+        )
 
     def provider_for(self, name: ProviderName) -> ClipProvider:
         if name == "auto":
@@ -402,17 +577,22 @@ class LongVideoOrchestrator:
             if os.getenv("HF_VIDEO_SPACE_ID"):
                 return HuggingFaceSpaceProvider()
             return MockProvider()
-        return {
+        providers: dict[str, type[ClipProvider]] = {
             "comfyui": ComfyUIProvider,
             "fal_ltx": FalLTXProvider,
             "hf_space": HuggingFaceSpaceProvider,
             "mock": MockProvider,
-        }[name]()
+        }
+        return providers[name]()
 
     async def create(self, request: VideoRequest) -> VideoJob:
         now = time.time()
         job = VideoJob(
-            id=str(uuid.uuid4()), state="queued", request=request.model_dump(), created_at=now, updated_at=now,
+            id=str(uuid.uuid4()),
+            state="queued",
+            request=request.model_dump(),
+            created_at=now,
+            updated_at=now,
             message="Queued for scene planning",
         )
         await self.store.put(job)
@@ -444,16 +624,15 @@ class LongVideoOrchestrator:
         workdir.mkdir(parents=True, exist_ok=True)
         try:
             job.state = "planning"
-            job.message = "Building an unlimited-length scene plan"
+            job.message = "Building scene plan"
             await self.store.put(job)
             scenes = self.planner.plan(request)
             job.scenes = [asdict(scene) for scene in scenes]
             await self.store.put(job)
-
             provider = self.provider_for(request.provider)
             semaphore = asyncio.Semaphore(self.scene_parallelism)
-            completed = 0
             clips: list[Path | None] = [None] * len(scenes)
+            completed = 0
 
             async def generate_one(scene: ScenePlan) -> None:
                 nonlocal completed
@@ -462,26 +641,26 @@ class LongVideoOrchestrator:
                     if not current or current.cancelled:
                         raise asyncio.CancelledError
                     clip = await provider.generate(scene, request, workdir)
-                    scene.clip_path = str(clip)
                     clips[scene.index] = clip
+                    scene.clip_path = str(clip)
                     completed += 1
                     current.state = "generating"
-                    current.progress = completed / max(1, len(scenes)) * 0.88
+                    current.progress = completed / len(scenes) * 0.88
                     current.message = f"Generated scene {completed}/{len(scenes)}"
                     current.scenes[scene.index] = asdict(scene)
                     await self.store.put(current)
 
             await asyncio.gather(*(generate_one(scene) for scene in scenes))
-            valid_clips = [clip for clip in clips if clip is not None]
-            if len(valid_clips) != len(scenes):
+            ready = [clip for clip in clips if clip is not None]
+            if len(ready) != len(scenes):
                 raise RuntimeError("One or more scenes did not produce a clip")
 
             job = await self.store.get(job_id) or job
             job.state = "rendering"
             job.progress = 0.92
-            job.message = "Normalizing and concatenating all scenes"
+            job.message = "Normalizing and concatenating scenes"
             await self.store.put(job)
-            output = await self.renderer.render(job_id, valid_clips, request, workdir)
+            output = await self.renderer.render(job_id, ready, request, workdir)
             job.state = "completed"
             job.progress = 1.0
             job.message = "Video completed"
@@ -493,9 +672,9 @@ class LongVideoOrchestrator:
             job.state = "cancelled"
             job.message = "Video job cancelled"
             await self.store.put(job)
-        except Exception as exc:
+        except Exception as error:
             job = await self.store.get(job_id) or job
             job.state = "failed"
-            job.error = str(exc)
+            job.error = str(error)
             job.message = "Video generation failed"
             await self.store.put(job)
