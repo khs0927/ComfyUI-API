@@ -26,6 +26,7 @@ on:
 permissions:
   contents: read
   actions: write
+  variables: write
 
 jobs:
   bootstrap:
