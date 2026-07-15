@@ -3,7 +3,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from video_engine.core import ScenePlanner, VideoRequest
+from video_engine import VideoRequest
+from video_engine.core import ScenePlanner
 from video_engine.remote_providers import (
     BeamHeliosProvider,
     FallbackProvider,
@@ -36,12 +37,22 @@ def test_korean_script_duration_is_estimated_when_unspecified():
     assert sum(scene.duration_seconds for scene in scenes) == 120
 
 
-def test_only_free_local_or_auto_provider_values_are_accepted():
-    for provider in ("helios", "wan21", "comfyui", "mock", "auto"):
+def test_free_cloud_local_and_reserved_provider_values_are_accepted():
+    accepted = (
+        "auto",
+        "beam",
+        "kaggle",
+        "hf",
+        "helios",
+        "wan21",
+        "comfyui",
+        "mock",
+        "modal",
+    )
+    for provider in accepted:
         assert VideoRequest(prompt="test prompt", provider=provider).provider == provider
-    for paid_or_direct_remote in ("fal_ltx", "hf_space", "beam", "modal"):
-        with pytest.raises(ValidationError):
-            VideoRequest(prompt="test prompt", provider=paid_or_direct_remote)
+    with pytest.raises(ValidationError):
+        VideoRequest(prompt="test prompt", provider="fal_ltx")
 
 
 def test_aspect_ratio_normalizes_dimensions():
