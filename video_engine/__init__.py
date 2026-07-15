@@ -26,15 +26,12 @@ class VideoRequest(_core.VideoRequest):
 # request class keeps persisted jobs compatible while extending provider values.
 _core.VideoRequest = VideoRequest
 
-from .remote_providers import (  # noqa: E402
-    BeamHeliosProvider,
-    HuggingFaceSpaceProvider,
-    KaggleHeliosProvider,
-    ModalReservedProvider,
-    install as install_remote_provider_chain,
-)
+from . import remote_providers as _remote  # noqa: E402
+from .hf_presets import install_hf_preset_provider  # noqa: E402
 
-install_remote_provider_chain()
+# Apply a verified Space schema before the automatic provider factories are used.
+install_hf_preset_provider(_remote)
+_remote.install()
 
 LongVideoOrchestrator = _core.LongVideoOrchestrator
 VideoJob = _core.VideoJob
@@ -45,17 +42,17 @@ def _provider_for(self: LongVideoOrchestrator, name: ProviderName):
     if name == "beam":
         if not (os.getenv("BEAM_TASK_QUEUE_URL") and os.getenv("BEAM_TOKEN")):
             raise RuntimeError("Beam is not configured")
-        return BeamHeliosProvider()
+        return _remote.BeamHeliosProvider()
     if name == "kaggle":
         if not os.getenv("KAGGLE_KERNEL_ID"):
             raise RuntimeError("Kaggle is not configured")
-        return KaggleHeliosProvider()
+        return _remote.KaggleHeliosProvider()
     if name == "hf":
         if not os.getenv("HF_VIDEO_SPACE_ID"):
             raise RuntimeError("Hugging Face Space is not configured")
-        return HuggingFaceSpaceProvider()
+        return _remote.HuggingFaceSpaceProvider()
     if name == "modal":
-        return ModalReservedProvider()
+        return _remote.ModalReservedProvider()
     return _previous_provider_for(self, name)
 
 
