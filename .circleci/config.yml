@@ -1,0 +1,55 @@
+version: 2.1
+
+jobs:
+  test-video-controller:
+    docker:
+      - image: cimg/python:3.11
+    resource_class: medium
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - video-v2-{{ checksum "requirements-video.txt" }}
+            - video-v2-
+      - run:
+          name: Install FFmpeg and Python dependencies
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+            python -m venv .venv
+            . .venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements-video.txt pytest ruff
+      - save_cache:
+          key: video-v2-{{ checksum "requirements-video.txt" }}
+          paths:
+            - ~/.cache/pip
+      - run:
+          name: Lint and compile
+          command: |
+            . .venv/bin/activate
+            ruff check --select E9,F63,F7,F82 video_engine video_api.py video_mcp_server.py tests workers
+            python -m compileall -q video_engine video_api.py video_mcp_server.py tests workers
+      - run:
+          name: Run unit tests
+          command: |
+            . .venv/bin/activate
+            pytest -q tests
+
+  build-video-container:
+    machine:
+      image: ubuntu-2204:current
+    resource_class: medium
+    steps:
+      - checkout
+      - run:
+          name: Build controller image
+          command: docker build -f Dockerfile.video -t hs-unlimited-ai-video:${CIRCLE_SHA1} .
+
+workflows:
+  video-controller-ci:
+    jobs:
+      - test-video-controller
+      - build-video-container:
+          requires:
+            - test-video-controller

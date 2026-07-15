@@ -1,0 +1,129 @@
+name: Video issue worker
+
+on:
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: remote-video-generation
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    if: ${{ startsWith(github.event.issue.title, '[video]') && github.event.issue.user.login == github.repository_owner }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      VIDEO_DATA_ROOT: ${{ github.workspace }}/video-data
+      VIDEO_PROVIDER_ORDER: beam,kaggle,hf
+      VIDEO_SCENE_PARALLELISM: "1"
+      REMOTE_JOB_MAX_MINUTES: "20"
+      BEAM_TOKEN: ${{ secrets.BEAM_TOKEN }}
+      BEAM_TASK_QUEUE_URL: ${{ vars.BEAM_TASK_QUEUE_URL }}
+      BEAM_AUTH_SCHEME: ${{ vars.BEAM_AUTH_SCHEME || 'Bearer' }}
+      BEAM_DAILY_VIDEO_SECONDS: "1200"
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      KAGGLE_KERNEL_ID: ${{ vars.KAGGLE_KERNEL_ID }}
+      KAGGLE_WORKER_TEMPLATE: workers/kaggle_helios
+      KAGGLE_ACCELERATOR: gpu
+      KAGGLE_DAILY_VIDEO_SECONDS: "600"
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_VIDEO_SPACE_PRESET: helios_realtime
+      HF_DAILY_VIDEO_SECONDS: "120"
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      ISSUE_BODY: ${{ github.event.issue.body }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Acknowledge request
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "원격 영상 작업을 시작했습니다. 진행 상황은 Actions 실행에서 확인할 수 있습니다: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Install runtime dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install --upgrade pip
+          pip install -r requirements-video.txt "kaggle>=2.0" "gradio-client>=1.8"
+
+      - name: Parse issue request
+        run: |
+          printf '%s' "$ISSUE_BODY" > issue-body.txt
+          python scripts/parse_video_issue.py --body-file issue-body.txt --output video-request.json
+          python - <<'PY'
+          import json
+          payload = json.load(open('video-request.json', encoding='utf-8'))
+          print({
+              'provider': payload['provider'],
+              'minutes': payload['target_duration_minutes'],
+              'scene_seconds': payload['scene_seconds'],
+              'aspect_ratio': payload['aspect_ratio'],
+          })
+          PY
+
+      - name: Validate configured providers
+        run: |
+          set -euo pipefail
+          provider=$(python -c "import json; print(json.load(open('video-request.json'))['provider'])")
+          case "$provider" in
+            auto)
+              if [ -z "$BEAM_TASK_QUEUE_URL" ] && [ -z "$KAGGLE_KERNEL_ID" ] && [ -z "$HF_TOKEN" ]; then
+                echo "No remote provider is configured." >&2
+                exit 40
+              fi
+              ;;
+            beam)
+              if [ -z "$BEAM_TOKEN" ] || [ -z "$BEAM_TASK_QUEUE_URL" ]; then
+                echo "Beam is not configured." >&2
+                exit 41
+              fi
+              ;;
+            kaggle)
+              if [ -z "$KAGGLE_API_TOKEN" ] || [ -z "$KAGGLE_KERNEL_ID" ]; then
+                echo "Kaggle is not configured." >&2
+                exit 42
+              fi
+              ;;
+            hf)
+              if [ -z "$HF_TOKEN" ]; then
+                echo "HF_TOKEN is required for authenticated quota." >&2
+                exit 43
+              fi
+              ;;
+          esac
+
+      - name: Generate video
+        id: video
+        run: |
+          python scripts/run_remote_video_job.py \
+            --request-json video-request.json \
+            --timeout-seconds 21000
+
+      - name: Upload completed MP4
+        id: artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-video-${{ steps.video.outputs.job_id }}
+          path: ${{ steps.video.outputs.output_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Comment success
+        if: success()
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "영상 생성이 완료되었습니다. 아래 Actions 실행의 **Artifacts**에서 MP4를 내려받으세요.\n\n${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\n\nJob ID: \`${{ steps.video.outputs.job_id }}\`"
+          gh issue close "$ISSUE_NUMBER" --reason completed
+
+      - name: Comment failure
+        if: failure()
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "영상 작업이 실패했습니다. 오류 로그: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\n\n비밀키 등록과 공급자 할당량을 확인한 뒤 이 이슈를 다시 열면 재시도됩니다."

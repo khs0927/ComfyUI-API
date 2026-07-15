@@ -1,0 +1,164 @@
+name: Generate remote AI video
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: Visual and narrative direction
+        required: true
+        type: string
+      minutes:
+        description: Final video duration in minutes (maximum 20)
+        required: true
+        default: "1"
+        type: string
+      scene_seconds:
+        description: Scene duration before provider-specific chunking
+        required: true
+        default: "90"
+        type: string
+      provider:
+        description: Provider selection
+        required: true
+        default: auto
+        type: choice
+        options:
+          - auto
+          - beam
+          - kaggle
+          - hf
+      aspect_ratio:
+        description: Output aspect ratio
+        required: true
+        default: "16:9"
+        type: choice
+        options:
+          - "16:9"
+          - "9:16"
+          - "1:1"
+      script_text:
+        description: Optional narration/script text
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remote-video-generation
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      VIDEO_DATA_ROOT: ${{ github.workspace }}/video-data
+      VIDEO_PROVIDER_ORDER: beam,kaggle,hf
+      VIDEO_SCENE_PARALLELISM: "1"
+      REMOTE_JOB_MAX_MINUTES: "20"
+      BEAM_TOKEN: ${{ secrets.BEAM_TOKEN }}
+      BEAM_TASK_QUEUE_URL: ${{ vars.BEAM_TASK_QUEUE_URL }}
+      BEAM_AUTH_SCHEME: ${{ vars.BEAM_AUTH_SCHEME || 'Bearer' }}
+      BEAM_DAILY_VIDEO_SECONDS: "1200"
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      KAGGLE_KERNEL_ID: ${{ vars.KAGGLE_KERNEL_ID }}
+      KAGGLE_WORKER_TEMPLATE: workers/kaggle_helios
+      KAGGLE_ACCELERATOR: gpu
+      KAGGLE_DAILY_VIDEO_SECONDS: "600"
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_VIDEO_SPACE_PRESET: helios_realtime
+      HF_DAILY_VIDEO_SECONDS: "120"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install runtime dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install --upgrade pip
+          pip install -r requirements-video.txt "kaggle>=2.0" "gradio-client>=1.8"
+
+      - name: Validate selected provider
+        env:
+          SELECTED_PROVIDER: ${{ inputs.provider }}
+        run: |
+          set -euo pipefail
+          case "$SELECTED_PROVIDER" in
+            auto)
+              if [ -z "$BEAM_TASK_QUEUE_URL" ] && [ -z "$KAGGLE_KERNEL_ID" ] && [ -z "$HF_TOKEN" ]; then
+                echo "No remote provider is configured." >&2
+                exit 40
+              fi
+              ;;
+            beam)
+              if [ -z "$BEAM_TOKEN" ] || [ -z "$BEAM_TASK_QUEUE_URL" ]; then
+                echo "Beam is not configured." >&2
+                exit 41
+              fi
+              ;;
+            kaggle)
+              if [ -z "$KAGGLE_API_TOKEN" ] || [ -z "$KAGGLE_KERNEL_ID" ]; then
+                echo "Kaggle is not configured." >&2
+                exit 42
+              fi
+              ;;
+            hf)
+              if [ -z "$HF_TOKEN" ]; then
+                echo "HF_TOKEN is required for authenticated quota." >&2
+                exit 43
+              fi
+              ;;
+          esac
+
+      - name: Write optional script file
+        if: ${{ inputs.script_text != '' }}
+        env:
+          SCRIPT_TEXT: ${{ inputs.script_text }}
+        run: printf '%s' "$SCRIPT_TEXT" > input-script.txt
+
+      - name: Generate video
+        id: video
+        env:
+          INPUT_PROMPT: ${{ inputs.prompt }}
+          INPUT_MINUTES: ${{ inputs.minutes }}
+          INPUT_SCENE_SECONDS: ${{ inputs.scene_seconds }}
+          INPUT_PROVIDER: ${{ inputs.provider }}
+          INPUT_ASPECT_RATIO: ${{ inputs.aspect_ratio }}
+          HAS_SCRIPT: ${{ inputs.script_text != '' }}
+        run: |
+          set -euo pipefail
+          args=(
+            --prompt "$INPUT_PROMPT"
+            --minutes "$INPUT_MINUTES"
+            --scene-seconds "$INPUT_SCENE_SECONDS"
+            --provider "$INPUT_PROVIDER"
+            --aspect-ratio "$INPUT_ASPECT_RATIO"
+            --timeout-seconds 21000
+          )
+          if [ "$HAS_SCRIPT" = "true" ]; then
+            args+=(--script-file input-script.txt)
+          fi
+          python scripts/run_remote_video_job.py "${args[@]}"
+
+      - name: Upload completed MP4
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-video-${{ steps.video.outputs.job_id }}
+          path: ${{ steps.video.outputs.output_path }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Write job summary
+        run: |
+          {
+            echo "## Remote AI video completed"
+            echo "- Provider request: ${{ inputs.provider }}"
+            echo "- Duration: ${{ inputs.minutes }} minutes"
+            echo "- Job ID: ${{ steps.video.outputs.job_id }}"
+            echo "- Download the MP4 from this workflow run's Artifacts section."
+          } >> "$GITHUB_STEP_SUMMARY"
