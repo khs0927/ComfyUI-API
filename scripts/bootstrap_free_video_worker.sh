@@ -30,7 +30,7 @@ Helios-Distilled installed.
 
 Add these values to .env.video:
 HELIOS_ROOT=$ROOT/vendor/Helios
-HELIOS_INFER_SCRIPT=$ROOT/vendor/Helios/scripts/inference/infer_helios.py
+HELIOS_INFER_SCRIPT=$ROOT/vendor/Helios/infer_helios.py
 HELIOS_MODEL=$ROOT/models/Helios-Distilled
 
 Helios code and weights are published under Apache-2.0 metadata.
