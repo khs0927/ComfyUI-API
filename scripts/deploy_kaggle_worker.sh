@@ -26,7 +26,7 @@ from pathlib import Path
 path = Path(sys.argv[1])
 payload = json.loads(path.read_text(encoding="utf-8"))
 payload["id"] = sys.argv[2]
-payload["title"] = "Open video fallback worker"
+payload["title"] = sys.argv[2].split("/", 1)[-1].replace("-", " ").title()
 payload["is_private"] = "true"
 payload["enable_gpu"] = "true"
 payload["enable_internet"] = "true"

@@ -10,9 +10,19 @@ from pathlib import Path
 
 
 WORK = Path("/kaggle/working") if Path("/kaggle/working").exists() else Path.cwd()
-REQUEST_PATH = Path.cwd() / "request.json"
-if not REQUEST_PATH.exists():
-    REQUEST_PATH = WORK / "request.json"
+REQUEST_PATH = next(
+    (
+        path
+        for path in (
+            Path.cwd() / "request.json",
+            Path(__file__).resolve().parent / "request.json",
+            Path("/kaggle/src/request.json"),
+            WORK / "request.json",
+        )
+        if path.exists()
+    ),
+    WORK / "request.json",
+)
 OUTPUT = WORK / "scene.mp4"
 WAN_ROOT = WORK / "Wan2.1"
 MODEL_DIR = WORK / "models" / "Wan2.1-T2V-1.3B"
@@ -93,7 +103,19 @@ def generate_chunk(model_dir: Path, prompt: str, seed: int, index: int) -> Path:
 
 
 def main() -> None:
-    request = json.loads(REQUEST_PATH.read_text(encoding="utf-8"))
+    if REQUEST_PATH.exists():
+        request = json.loads(REQUEST_PATH.read_text(encoding="utf-8"))
+    else:
+        request = json.loads(os.getenv("KAGGLE_REQUEST_JSON", "{}"))
+        request.setdefault(
+            "prompt",
+            "A calm cinematic sunrise over mountains, natural camera motion",
+        )
+        request.setdefault("duration_seconds", 5)
+        request.setdefault("width", 832)
+        request.setdefault("height", 480)
+        request.setdefault("fps", 16)
+        request.setdefault("seed", 42)
     prompt = str(request["prompt"])
     duration = max(3, min(int(request.get("duration_seconds", 10)), 30))
     width = max(256, min(int(request.get("width", 832)), 1280))
