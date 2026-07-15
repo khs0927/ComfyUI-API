@@ -50,5 +50,9 @@ jobs:
               assert 'jobs' in payload, f'{path} has no jobs mapping'
               print(f'YAML OK: {path}')
           PY
+      - name: Validate GitHub Actions workflows
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          "$(go env GOPATH)/bin/actionlint" -color
       - name: Run unit tests
         run: pytest -q tests
