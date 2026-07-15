@@ -6,6 +6,7 @@ on:
       - agent/unlimited-ai-video-mcp
   pull_request:
     paths:
+      - "__init__.py"
       - "video_engine/**"
       - "workers/**"
       - "tests/**"
@@ -30,28 +31,7 @@ jobs:
           pip install -q fastapi uvicorn pydantic httpx mcp python-multipart sse-starlette huggingface-hub pytest ruff
       - name: Compile and lint
         run: |
-          ruff check --select E9,F63,F7,F82 video_engine video_api.py video_mcp_server.py tests workers
-          python -m compileall -q video_engine video_api.py video_mcp_server.py tests workers
-      - name: Capture fixed-duration pytest result
-        run: |
-          set +e
-          pytest -vv -s tests/test_video_engine.py::test_planner_has_no_fixed_final_duration_cap > pytest-fixed.log 2>&1
-          echo $? > pytest-fixed.exit
-          exit 0
-      - name: Upload pytest diagnostic
-        uses: actions/upload-artifact@v4
-        with:
-          name: pytest-fixed-diagnostic
-          path: |
-            pytest-fixed.log
-            pytest-fixed.exit
-      - name: Enforce fixed-duration pytest result
-        run: test "$(cat pytest-fixed.exit)" = "0"
-      - name: Test estimated-duration scene planning
-        run: pytest -q tests/test_video_engine.py::test_korean_script_duration_is_estimated_when_unspecified
-      - name: Test provider request values
-        run: pytest -q tests/test_video_engine.py::test_free_cloud_local_and_reserved_provider_values_are_accepted tests/test_video_engine.py::test_aspect_ratio_normalizes_dimensions
-      - name: Test remote parsing and templates
-        run: pytest -q tests/test_video_engine.py::test_remote_response_helpers_are_schema_tolerant tests/test_video_engine.py::test_hf_template_replacement_preserves_types tests/test_video_engine.py::test_hf_json_templates_are_valid_examples
-      - name: Test provider chain
-        run: pytest -q tests/test_video_engine.py::test_provider_order_builds_only_configured_backends
+          ruff check --select E9,F63,F7,F82 __init__.py video_engine video_api.py video_mcp_server.py tests workers
+          python -m compileall -q __init__.py video_engine video_api.py video_mcp_server.py tests workers
+      - name: Run unit tests
+        run: pytest -q tests
