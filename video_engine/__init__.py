@@ -28,9 +28,11 @@ _core.VideoRequest = VideoRequest
 
 from . import remote_providers as _remote  # noqa: E402
 from .hf_presets import install_hf_preset_provider  # noqa: E402
+from .provider_patches import install_provider_patches  # noqa: E402
 
-# Apply a verified Space schema before the automatic provider factories are used.
+# Apply verified remote schemas and compatibility fixes before provider factories run.
 install_hf_preset_provider(_remote)
+install_provider_patches(_remote)
 _remote.install()
 
 LongVideoOrchestrator = _core.LongVideoOrchestrator
