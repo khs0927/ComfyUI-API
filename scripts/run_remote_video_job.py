@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import sys
 import time
@@ -11,10 +12,13 @@ from video_engine import LongVideoOrchestrator, VideoRequest
 
 
 async def main() -> int:
-    parser = argparse.ArgumentParser(description="Run a remote long-video job and wait for completion")
-    parser.add_argument("--prompt", required=True)
+    parser = argparse.ArgumentParser(
+        description="Run a remote long-video job and wait for completion"
+    )
+    parser.add_argument("--request-json")
+    parser.add_argument("--prompt")
     parser.add_argument("--script-file")
-    parser.add_argument("--minutes", type=float, required=True)
+    parser.add_argument("--minutes", type=float)
     parser.add_argument("--scene-seconds", type=int, default=30)
     parser.add_argument("--provider", default="auto")
     parser.add_argument("--aspect-ratio", default="16:9")
@@ -25,21 +29,27 @@ async def main() -> int:
     parser.add_argument("--timeout-seconds", type=int, default=21600)
     args = parser.parse_args()
 
-    script = None
-    if args.script_file:
-        script = Path(args.script_file).read_text(encoding="utf-8")
+    if args.request_json:
+        payload = json.loads(Path(args.request_json).read_text(encoding="utf-8"))
+        request = VideoRequest.model_validate(payload)
+    else:
+        if not args.prompt or args.minutes is None:
+            parser.error("--prompt and --minutes are required without --request-json")
+        script = None
+        if args.script_file:
+            script = Path(args.script_file).read_text(encoding="utf-8")
+        request = VideoRequest(
+            prompt=args.prompt,
+            script=script,
+            target_duration_minutes=args.minutes,
+            scene_seconds=args.scene_seconds,
+            provider=args.provider,
+            aspect_ratio=args.aspect_ratio,
+            width=args.width,
+            height=args.height,
+            fps=args.fps,
+        )
 
-    request = VideoRequest(
-        prompt=args.prompt,
-        script=script,
-        target_duration_minutes=args.minutes,
-        scene_seconds=args.scene_seconds,
-        provider=args.provider,
-        aspect_ratio=args.aspect_ratio,
-        width=args.width,
-        height=args.height,
-        fps=args.fps,
-    )
     engine = LongVideoOrchestrator(os.getenv("VIDEO_DATA_ROOT", "./video-data"))
     job = await engine.create(request)
     print(f"JOB_ID={job.id}", flush=True)
@@ -53,7 +63,8 @@ async def main() -> int:
             return 2
         if current.message != last_message:
             print(
-                f"state={current.state} progress={current.progress:.3f} message={current.message}",
+                f"state={current.state} progress={current.progress:.3f} "
+                f"message={current.message}",
                 flush=True,
             )
             last_message = current.message
