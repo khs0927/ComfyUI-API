@@ -22,13 +22,12 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-      - name: Install dependencies
+      - name: Install test dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          python -m pip install --upgrade pip
-          pip install -r requirements-video.txt pytest ruff
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install --upgrade pip -q
+          pip install -q fastapi uvicorn pydantic httpx mcp python-multipart sse-starlette huggingface-hub pytest ruff
       - name: Compile and lint
         run: |
           ruff check --select E9,F63,F7,F82 video_engine video_api.py video_mcp_server.py tests workers
