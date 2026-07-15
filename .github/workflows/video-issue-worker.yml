@@ -82,13 +82,22 @@ jobs:
               fi
               ;;
             beam)
-              test -n "$BEAM_TOKEN" && test -n "$BEAM_TASK_QUEUE_URL" || { echo "Beam is not configured." >&2; exit 41; }
+              if [ -z "$BEAM_TOKEN" ] || [ -z "$BEAM_TASK_QUEUE_URL" ]; then
+                echo "Beam is not configured." >&2
+                exit 41
+              fi
               ;;
             kaggle)
-              test -n "$KAGGLE_API_TOKEN" && test -n "$KAGGLE_KERNEL_ID" || { echo "Kaggle is not configured." >&2; exit 42; }
+              if [ -z "$KAGGLE_API_TOKEN" ] || [ -z "$KAGGLE_KERNEL_ID" ]; then
+                echo "Kaggle is not configured." >&2
+                exit 42
+              fi
               ;;
             hf)
-              test -n "$HF_TOKEN" || { echo "HF_TOKEN is required for authenticated quota." >&2; exit 43; }
+              if [ -z "$HF_TOKEN" ]; then
+                echo "HF_TOKEN is required for authenticated quota." >&2
+                exit 43
+              fi
               ;;
           esac
 
