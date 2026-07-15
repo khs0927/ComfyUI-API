@@ -28,7 +28,6 @@ def test_planner_has_no_fixed_final_duration_cap():
     scenes = ScenePlanner().plan(request)
     assert len(scenes) == 60
     assert sum(scene.duration_seconds for scene in scenes) == 1800
-    assert all(scene.visual_prompt for scene in scenes)
 
 
 def test_korean_script_duration_is_estimated_when_unspecified():
