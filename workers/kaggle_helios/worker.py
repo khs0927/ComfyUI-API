@@ -117,7 +117,7 @@ def main() -> None:
         request.setdefault("fps", 16)
         request.setdefault("seed", 42)
     prompt = str(request["prompt"])
-    duration = max(3, min(int(request.get("duration_seconds", 10)), 30))
+    duration = max(3, min(int(request.get("duration_seconds", 10)), 90))
     width = max(256, min(int(request.get("width", 832)), 1280))
     height = max(256, min(int(request.get("height", 480)), 720))
     fps = max(12, min(int(request.get("fps", 16)), 24))
