@@ -14,6 +14,7 @@ from .core import ScenePlan, VideoRequest
 def install_provider_patches(remote_module: Any) -> None:
     """Install compatibility fixes without changing the public provider contract."""
     base_beam = remote_module.BeamHeliosProvider
+    base_kaggle = remote_module.KaggleHeliosProvider
 
     class CompatibleBeamHeliosProvider(base_beam):
         async def generate(
@@ -68,4 +69,13 @@ def install_provider_patches(remote_module: Any) -> None:
                     await asyncio.sleep(self.poll_seconds)
             raise TimeoutError(f"Beam task exceeded {self.timeout:.0f}s")
 
+    class CompatibleKaggleProvider(base_kaggle):
+        def __init__(self) -> None:
+            super().__init__()
+            # Current Kaggle CLI documents the portable accelerator value as `gpu`.
+            # Specific hardware names can be restricted to competitions/admin accounts.
+            if "KAGGLE_ACCELERATOR" not in os.environ:
+                self.accelerator = "gpu"
+
     remote_module.BeamHeliosProvider = CompatibleBeamHeliosProvider
+    remote_module.KaggleHeliosProvider = CompatibleKaggleProvider
