@@ -32,14 +32,21 @@ jobs:
         run: |
           ruff check --select E9,F63,F7,F82 video_engine video_api.py video_mcp_server.py tests workers
           python -m compileall -q video_engine video_api.py video_mcp_server.py tests workers
-      - name: Import video package
-        run: python -c "from video_engine import VideoRequest; from video_engine.core import ScenePlanner; print(VideoRequest, ScenePlanner)"
-      - name: Construct fixed-duration request
-        run: python -c "from video_engine import VideoRequest; r=VideoRequest(prompt='documentary', script='story. '*200, target_duration_minutes=30, scene_seconds=30, provider='mock'); assert r.target_duration_minutes == 30"
-      - name: Calculate fixed-duration plan
-        run: python -c "from video_engine import VideoRequest; from video_engine.core import ScenePlanner; r=VideoRequest(prompt='documentary', script='story. '*200, target_duration_minutes=30, scene_seconds=30, provider='mock'); s=ScenePlanner().plan(r); assert len(s)==60; assert sum(x.duration_seconds for x in s)==1800"
-      - name: Test fixed-duration scene planning
-        run: pytest -q tests/test_video_engine.py::test_planner_has_no_fixed_final_duration_cap
+      - name: Capture fixed-duration pytest result
+        run: |
+          set +e
+          pytest -vv -s tests/test_video_engine.py::test_planner_has_no_fixed_final_duration_cap > pytest-fixed.log 2>&1
+          echo $? > pytest-fixed.exit
+          exit 0
+      - name: Upload pytest diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-fixed-diagnostic
+          path: |
+            pytest-fixed.log
+            pytest-fixed.exit
+      - name: Enforce fixed-duration pytest result
+        run: test "$(cat pytest-fixed.exit)" = "0"
       - name: Test estimated-duration scene planning
         run: pytest -q tests/test_video_engine.py::test_korean_script_duration_is_estimated_when_unspecified
       - name: Test provider request values
