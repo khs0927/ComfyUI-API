@@ -1,0 +1,145 @@
+name: Bootstrap free video providers
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_beam:
+        description: Deploy the Beam Helios task queue
+        required: true
+        default: true
+        type: boolean
+      kaggle_kernel_id:
+        description: Kaggle kernel ID in username/open-video-worker form
+        required: false
+        type: string
+      submit_kaggle_test:
+        description: Submit a 5 second Kaggle Wan2.1 smoke test
+        required: true
+        default: true
+        type: boolean
+      inspect_huggingface:
+        description: Inspect the verified Helios Hugging Face Space API
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      BEAM_TOKEN: ${{ secrets.BEAM_TOKEN }}
+      KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      KAGGLE_KERNEL_ID_INPUT: ${{ inputs.kaggle_kernel_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install provider CLIs
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-video.txt -r requirements-beam.txt "kaggle>=2.0" "gradio-client>=1.8"
+
+      - name: Record credential availability
+        run: |
+          {
+            echo "## Provider credential check"
+            if [ -n "$BEAM_TOKEN" ]; then echo "- Beam token: configured"; else echo "- Beam token: missing"; fi
+            if [ -n "$KAGGLE_API_TOKEN" ]; then echo "- Kaggle token: configured"; else echo "- Kaggle token: missing"; fi
+            if [ -n "$HF_TOKEN" ]; then echo "- Hugging Face token: configured"; else echo "- Hugging Face token: optional/missing"; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save Kaggle kernel ID as repository variable
+        if: ${{ inputs.kaggle_kernel_id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          value="$KAGGLE_KERNEL_ID_INPUT"
+          if gh api --method PATCH "repos/${GITHUB_REPOSITORY}/actions/variables/KAGGLE_KERNEL_ID" -f name=KAGGLE_KERNEL_ID -f value="$value" >/dev/null 2>&1; then
+            echo "Updated KAGGLE_KERNEL_ID repository variable."
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/variables" -f name=KAGGLE_KERNEL_ID -f value="$value" >/dev/null
+            echo "Created KAGGLE_KERNEL_ID repository variable."
+          fi
+
+      - name: Deploy Beam Helios queue
+        if: ${{ inputs.deploy_beam }}
+        id: beam
+        run: |
+          set -euo pipefail
+          if [ -z "$BEAM_TOKEN" ]; then
+            echo "BEAM_TOKEN repository secret is required." >&2
+            exit 20
+          fi
+          beam configure default --token "$BEAM_TOKEN"
+          set +e
+          beam deploy workers/beam_helios.py:generate 2>&1 | tee beam-deploy.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          url=$(grep -Eo 'https://[^[:space:]"'"']+\.app\.beam\.cloud[^[:space:]"'"']*' beam-deploy.log | tail -n1 || true)
+          if [ -z "$url" ]; then
+            echo "Beam deployment succeeded but invocation URL was not detected." >&2
+            exit 21
+          fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "Beam queue deployed: $url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save Beam queue URL as repository variable
+        if: ${{ inputs.deploy_beam && steps.beam.outputs.url != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEAM_URL: ${{ steps.beam.outputs.url }}
+        run: |
+          set -euo pipefail
+          if gh api --method PATCH "repos/${GITHUB_REPOSITORY}/actions/variables/BEAM_TASK_QUEUE_URL" -f name=BEAM_TASK_QUEUE_URL -f value="$BEAM_URL" >/dev/null 2>&1; then
+            echo "Updated BEAM_TASK_QUEUE_URL repository variable."
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/variables" -f name=BEAM_TASK_QUEUE_URL -f value="$BEAM_URL" >/dev/null
+            echo "Created BEAM_TASK_QUEUE_URL repository variable."
+          fi
+
+      - name: Submit Kaggle smoke test
+        if: ${{ inputs.submit_kaggle_test }}
+        env:
+          KAGGLE_KERNEL_ID: ${{ inputs.kaggle_kernel_id || vars.KAGGLE_KERNEL_ID }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KAGGLE_API_TOKEN" ]; then
+            echo "KAGGLE_API_TOKEN repository secret is required." >&2
+            exit 30
+          fi
+          if [ -z "$KAGGLE_KERNEL_ID" ]; then
+            echo "Kaggle kernel ID input or repository variable is required." >&2
+            exit 31
+          fi
+          bash scripts/deploy_kaggle_worker.sh | tee kaggle-submit.log
+          echo "Kaggle smoke test submitted: $KAGGLE_KERNEL_ID" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Inspect verified Hugging Face Space
+        if: ${{ inputs.inspect_huggingface }}
+        run: |
+          set -euo pipefail
+          python scripts/inspect_hf_space.py BestWishYsh/Helios-14B-RealTime-AOTI | tee hf-api.txt
+          grep -q "generate_video" hf-api.txt
+          echo "Verified Hugging Face Helios API schema." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload bootstrap logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-bootstrap-logs
+          if-no-files-found: ignore
+          path: |
+            beam-deploy.log
+            kaggle-submit.log
+            hf-api.txt
