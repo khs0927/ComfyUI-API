@@ -1,10 +1,12 @@
 import json
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from video_engine import VideoRequest
-from video_engine.core import ScenePlanner
+from video_engine.core import HeliosProvider, ScenePlan, ScenePlanner
+from video_engine.hf_presets import PRESETS, apply_hf_preset_env, build_inputs
 from video_engine.remote_providers import (
     BeamHeliosProvider,
     FallbackProvider,
@@ -117,3 +119,31 @@ def test_hf_json_templates_are_valid_examples(monkeypatch, tmp_path):
     provider = HuggingFaceSpaceProvider()
     assert provider.inputs_template == ["{{PROMPT}}", "{{SEED}}"]
     assert provider.kwargs_template == {"duration": "{{DURATION_SECONDS}}"}
+
+
+def test_verified_hf_helios_preset(monkeypatch):
+    monkeypatch.setenv("HF_VIDEO_SPACE_PRESET", "helios_realtime")
+    monkeypatch.delenv("HF_VIDEO_SPACE_ID", raising=False)
+    monkeypatch.delenv("HF_VIDEO_SPACE_API_NAME", raising=False)
+    assert apply_hf_preset_env() == "helios_realtime"
+    assert PRESETS["helios_realtime"]["space_id"] == (
+        "BestWishYsh/Helios-14B-RealTime-AOTI"
+    )
+    assert Path(HeliosProvider().script).name == "infer_helios.py"
+
+
+def test_hf_helios_input_schema_matches_space_source():
+    scene = ScenePlan(
+        index=0,
+        duration_seconds=8,
+        narration="test",
+        visual_prompt="cinematic ocean",
+        seed=42,
+    )
+    request = VideoRequest(prompt="test prompt", provider="hf", scene_seconds=8)
+    values = build_inputs("helios_realtime", scene, request)
+    assert values[0] == "Text-to-Video"
+    assert values[1] == "cinematic ocean"
+    assert values[6] in {198, 231}
+    assert values[8] == 42
+    assert len(values) == 10
