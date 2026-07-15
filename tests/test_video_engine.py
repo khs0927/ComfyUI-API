@@ -96,8 +96,14 @@ def test_provider_order_builds_only_configured_backends(monkeypatch, tmp_path):
 def test_hf_json_templates_are_valid_examples(monkeypatch, tmp_path):
     monkeypatch.setenv("VIDEO_DATA_ROOT", str(tmp_path))
     monkeypatch.setenv("HF_VIDEO_SPACE_ID", "owner/space")
-    monkeypatch.setenv("HF_VIDEO_SPACE_INPUTS_JSON", json.dumps(["{{PROMPT}}", "{{SEED}}"])))
-    monkeypatch.setenv("HF_VIDEO_SPACE_KWARGS_JSON", json.dumps({"duration": "{{DURATION_SECONDS}}"}))
+    monkeypatch.setenv(
+        "HF_VIDEO_SPACE_INPUTS_JSON",
+        json.dumps(["{{PROMPT}}", "{{SEED}}"]),
+    )
+    monkeypatch.setenv(
+        "HF_VIDEO_SPACE_KWARGS_JSON",
+        json.dumps({"duration": "{{DURATION_SECONDS}}"}),
+    )
     provider = HuggingFaceSpaceProvider()
     assert provider.inputs_template == ["{{PROMPT}}", "{{SEED}}"]
     assert provider.kwargs_template == {"duration": "{{DURATION_SECONDS}}"}
