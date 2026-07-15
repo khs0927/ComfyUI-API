@@ -19,7 +19,10 @@ image = (
     Image(python_version="python3.11")
     .add_commands(
         [
-            "apt-get update -y && apt-get install -y git ffmpeg libgl1 libglib2.0-0",
+            (
+                "apt-get update -y && apt-get install -y git ffmpeg libgl1 "
+                "libglib2.0-0 libopenmpi-dev"
+            ),
             f"git clone --depth=1 https://github.com/PKU-YuanGroup/Helios.git {HELIOS_ROOT}",
             f"cd {HELIOS_ROOT} && pip install -r requirements.txt",
             "pip install 'huggingface_hub[hf_xet]'",
@@ -67,7 +70,6 @@ def _model_path() -> Path:
     max_pending_tasks=24,
     retries=1,
     authorized=True,
-    secrets=["HF_TOKEN"],
     volumes=[Volume(name="helios-models", mount_path=MODEL_VOLUME)],
 )
 def generate(**inputs: Any) -> dict[str, Any]:
@@ -80,6 +82,7 @@ def generate(**inputs: Any) -> dict[str, Any]:
     height = max(256, min(int(inputs.get("height", 544)), 1080))
     fps = max(12, min(int(inputs.get("fps", 24)), 30))
     seed = int(inputs.get("seed", 0))
+    negative_prompt = str(inputs.get("negative_prompt", "")).strip()
     frame_count = max(99, math.ceil(duration * fps / 33) * 33)
 
     model_path = _model_path()
@@ -120,8 +123,10 @@ def generate(**inputs: Any) -> dict[str, Any]:
         "--output_folder",
         str(raw_dir),
     ]
+    if negative_prompt:
+        command.extend(["--negative_prompt", negative_prompt])
 
-    if os.getenv("BEAM_HELIOS_LOW_VRAM", "false").lower() == "true":
+    if os.getenv("BEAM_HELIOS_LOW_VRAM", "true").lower() == "true":
         command.extend(
             [
                 "--enable_low_vram_mode",
