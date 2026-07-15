@@ -266,7 +266,7 @@ class HeliosProvider(LocalProvider):
         self.script = Path(
             os.getenv(
                 "HELIOS_INFER_SCRIPT",
-                str(self.root / "scripts/inference/infer_helios.py"),
+                str(self.root / "infer_helios.py"),
             )
         ).resolve()
         self.model = os.getenv("HELIOS_MODEL", "BestWishYsh/Helios-Distilled")
@@ -296,10 +296,16 @@ class HeliosProvider(LocalProvider):
             scene.visual_prompt,
             "--num_frames",
             str(frame_count),
+            "--height",
+            str(request.height),
+            "--width",
+            str(request.width),
             "--fps",
             str(request.fps),
             "--guidance_scale",
             "1.0",
+            "--seed",
+            str(scene.seed),
             "--is_enable_stage2",
             "--pyramid_num_inference_steps_list",
             "2",
@@ -312,6 +318,8 @@ class HeliosProvider(LocalProvider):
             "--group_offloading_type",
             "leaf_level",
         ]
+        if request.negative_prompt:
+            command.extend(["--negative_prompt", request.negative_prompt])
         await self.run(command, self.script.parent)
         raw = self.newest_video(output_dir)
         destination = workdir / f"scene-{scene.index:05d}.mp4"
