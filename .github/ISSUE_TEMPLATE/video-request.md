@@ -13,7 +13,7 @@ Replace the example values below. Keep the body as valid JSON.
   "prompt": "A coherent cinematic documentary about restoration and hope",
   "script": "Optional narration or full source text",
   "target_duration_minutes": 1,
-  "scene_seconds": 30,
+  "scene_seconds": 90,
   "provider": "auto",
   "aspect_ratio": "16:9",
   "width": 960,
@@ -25,4 +25,4 @@ Replace the example values below. Keep the body as valid JSON.
 
 Allowed providers: `auto`, `beam`, `kaggle`, `hf`.
 
-The issue worker comments with the Actions run link. After completion, download the MP4 from the run's **Artifacts** section. Artifacts are retained for 7 days.
+Remote issue jobs are limited to 20 minutes per request. The issue worker comments with the Actions run link. After completion, download the MP4 from the run's **Artifacts** section. Artifacts are retained for 7 days.
