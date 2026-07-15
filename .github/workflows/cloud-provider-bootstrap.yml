@@ -36,6 +36,7 @@ jobs:
       KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       KAGGLE_KERNEL_ID_INPUT: ${{ inputs.kaggle_kernel_id }}
+      KAGGLE_ACCELERATOR: gpu
     steps:
       - uses: actions/checkout@v4
 
@@ -86,27 +87,51 @@ jobs:
           status=${PIPESTATUS[0]}
           set -e
           if [ "$status" -ne 0 ]; then exit "$status"; fi
-          url=$(grep -Eo 'https://[^[:space:]"'"']+\.app\.beam\.cloud[^[:space:]"'"']*' beam-deploy.log | tail -n1 || true)
+          url=$(python - <<'PY'
+          import pathlib
+          import re
+
+          text = pathlib.Path('beam-deploy.log').read_text(encoding='utf-8', errors='replace')
+          matches = re.findall(r"https://[^\s\"']+\.app\.beam\.cloud[^\s\"']*", text)
+          print(matches[-1] if matches else "")
+          PY
+          )
+          scheme=$(python - <<'PY'
+          import pathlib
+          import re
+
+          text = pathlib.Path('beam-deploy.log').read_text(encoding='utf-8', errors='replace')
+          print('Basic' if re.search(r'Authorization\s*:\s*Basic', text, re.I) else 'Bearer')
+          PY
+          )
           if [ -z "$url" ]; then
             echo "Beam deployment succeeded but invocation URL was not detected." >&2
             exit 21
           fi
           echo "url=$url" >> "$GITHUB_OUTPUT"
-          echo "Beam queue deployed: $url" >> "$GITHUB_STEP_SUMMARY"
+          echo "scheme=$scheme" >> "$GITHUB_OUTPUT"
+          echo "Beam queue deployed: $url ($scheme auth)" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Save Beam queue URL as repository variable
+      - name: Save Beam settings as repository variables
         if: ${{ inputs.deploy_beam && steps.beam.outputs.url != '' }}
         env:
           GH_TOKEN: ${{ github.token }}
           BEAM_URL: ${{ steps.beam.outputs.url }}
+          BEAM_SCHEME: ${{ steps.beam.outputs.scheme }}
         run: |
           set -euo pipefail
-          if gh api --method PATCH "repos/${GITHUB_REPOSITORY}/actions/variables/BEAM_TASK_QUEUE_URL" -f name=BEAM_TASK_QUEUE_URL -f value="$BEAM_URL" >/dev/null 2>&1; then
-            echo "Updated BEAM_TASK_QUEUE_URL repository variable."
-          else
-            gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/variables" -f name=BEAM_TASK_QUEUE_URL -f value="$BEAM_URL" >/dev/null
-            echo "Created BEAM_TASK_QUEUE_URL repository variable."
-          fi
+          upsert_variable() {
+            local name="$1"
+            local value="$2"
+            if gh api --method PATCH "repos/${GITHUB_REPOSITORY}/actions/variables/${name}" -f name="$name" -f value="$value" >/dev/null 2>&1; then
+              echo "Updated $name repository variable."
+            else
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/actions/variables" -f name="$name" -f value="$value" >/dev/null
+              echo "Created $name repository variable."
+            fi
+          }
+          upsert_variable BEAM_TASK_QUEUE_URL "$BEAM_URL"
+          upsert_variable BEAM_AUTH_SCHEME "$BEAM_SCHEME"
 
       - name: Submit Kaggle smoke test
         if: ${{ inputs.submit_kaggle_test }}
