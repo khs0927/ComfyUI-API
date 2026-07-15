@@ -46,7 +46,7 @@ JSON
 
 kaggle kernels push \
   -p "$TMP_DIR" \
-  --accelerator "${KAGGLE_ACCELERATOR:-NvidiaTeslaT4}" \
+  --accelerator "${KAGGLE_ACCELERATOR:-gpu}" \
   --timeout "${KAGGLE_SCENE_TIMEOUT:-21600}"
 
 cat <<EOF
