@@ -87,7 +87,7 @@ def generate(**inputs: Any) -> dict[str, Any]:
     raw_dir = task_root / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
 
-    infer_script = Path(HELIOS_ROOT) / "scripts" / "inference" / "infer_helios.py"
+    infer_script = Path(HELIOS_ROOT) / "infer_helios.py"
     command = [
         "python",
         str(infer_script),
@@ -101,6 +101,10 @@ def generate(**inputs: Any) -> dict[str, Any]:
         prompt,
         "--num_frames",
         str(frame_count),
+        "--height",
+        str(height),
+        "--width",
+        str(width),
         "--fps",
         str(fps),
         "--guidance_scale",
@@ -173,7 +177,3 @@ def generate(**inputs: Any) -> dict[str, Any]:
         "size_bytes": size_bytes,
         "model": MODEL_ID,
     }
-
-
-if __name__ == "__main__":
-    generate()
