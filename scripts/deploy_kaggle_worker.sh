@@ -6,8 +6,8 @@ if [ -z "${KAGGLE_KERNEL_ID:-}" ]; then
   exit 2
 fi
 
-if [ ! -f "$HOME/.kaggle/kaggle.json" ] && { [ -z "${KAGGLE_USERNAME:-}" ] || [ -z "${KAGGLE_KEY:-}" ]; }; then
-  echo "Configure ~/.kaggle/kaggle.json or KAGGLE_USERNAME and KAGGLE_KEY." >&2
+if [ -z "${KAGGLE_API_TOKEN:-}" ] && [ ! -f "$HOME/.kaggle/kaggle.json" ] && { [ -z "${KAGGLE_USERNAME:-}" ] || [ -z "${KAGGLE_KEY:-}" ]; }; then
+  echo "Configure KAGGLE_API_TOKEN, ~/.kaggle/kaggle.json, or KAGGLE_USERNAME + KAGGLE_KEY." >&2
   exit 2
 fi
 
