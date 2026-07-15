@@ -1,6 +1,6 @@
 {
-  "id": "your-kaggle-username/helios-video-worker",
-  "title": "Helios video worker",
+  "id": "your-kaggle-username/open-video-worker",
+  "title": "Open video fallback worker",
   "code_file": "worker.py",
   "language": "python",
   "kernel_type": "script",
