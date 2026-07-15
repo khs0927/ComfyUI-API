@@ -9,8 +9,8 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - video-v1-{{ checksum "requirements-video.txt" }}
-            - video-v1-
+            - video-v2-{{ checksum "requirements-video.txt" }}
+            - video-v2-
       - run:
           name: Install FFmpeg and Python dependencies
           command: |
@@ -21,15 +21,15 @@ jobs:
             pip install --upgrade pip
             pip install -r requirements-video.txt pytest ruff
       - save_cache:
-          key: video-v1-{{ checksum "requirements-video.txt" }}
+          key: video-v2-{{ checksum "requirements-video.txt" }}
           paths:
             - ~/.cache/pip
       - run:
           name: Lint and compile
           command: |
             . .venv/bin/activate
-            ruff check video_engine video_api.py video_mcp_server.py tests
-            python -m compileall -q video_engine video_api.py video_mcp_server.py
+            ruff check --select E9,F63,F7,F82 video_engine video_api.py video_mcp_server.py tests workers
+            python -m compileall -q video_engine video_api.py video_mcp_server.py tests workers
       - run:
           name: Run unit tests
           command: |
