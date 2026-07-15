@@ -8,14 +8,14 @@ on:
         required: true
         type: string
       minutes:
-        description: Final video duration in minutes
+        description: Final video duration in minutes (maximum 20)
         required: true
         default: "1"
         type: string
       scene_seconds:
         description: Scene duration before provider-specific chunking
         required: true
-        default: "30"
+        default: "90"
         type: string
       provider:
         description: Provider selection
@@ -44,6 +44,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: remote-video-generation
+  cancel-in-progress: false
+
 jobs:
   generate:
     runs-on: ubuntu-latest
@@ -52,6 +56,7 @@ jobs:
       VIDEO_DATA_ROOT: ${{ github.workspace }}/video-data
       VIDEO_PROVIDER_ORDER: beam,kaggle,hf
       VIDEO_SCENE_PARALLELISM: "1"
+      REMOTE_JOB_MAX_MINUTES: "20"
       BEAM_TOKEN: ${{ secrets.BEAM_TOKEN }}
       BEAM_TASK_QUEUE_URL: ${{ vars.BEAM_TASK_QUEUE_URL }}
       BEAM_AUTH_SCHEME: ${{ vars.BEAM_AUTH_SCHEME || 'Bearer' }}
@@ -59,6 +64,7 @@ jobs:
       KAGGLE_API_TOKEN: ${{ secrets.KAGGLE_API_TOKEN }}
       KAGGLE_KERNEL_ID: ${{ vars.KAGGLE_KERNEL_ID }}
       KAGGLE_WORKER_TEMPLATE: workers/kaggle_helios
+      KAGGLE_ACCELERATOR: gpu
       KAGGLE_DAILY_VIDEO_SECONDS: "600"
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
       HF_VIDEO_SPACE_PRESET: helios_realtime
