@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>HS Unlimited AI Video Dashboard</title>
+    <title>HS Unlimited AI Video Serverless Dashboard</title>
     <!-- Google Fonts: Outfit & Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -90,43 +90,6 @@
             color: var(--text-muted);
         }
 
-        /* Provider Badges */
-        .providers-status {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        .badge {
-            font-size: 0.75rem;
-            font-weight: 600;
-            padding: 4px 10px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .badge-active {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--accent-success);
-        }
-
-        .badge-inactive {
-            background: rgba(156, 163, 175, 0.05);
-            color: var(--text-muted);
-        }
-
-        .badge .dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background-color: currentColor;
-        }
-
         /* Form Inputs */
         .form-group {
             display: flex;
@@ -208,16 +171,18 @@
             background: transparent;
             border: 1px solid var(--accent-danger);
             color: var(--accent-danger);
-            padding: 8px 12px;
-            font-size: 0.8rem;
+            padding: 6px 10px;
+            font-size: 0.75rem;
             border-radius: 8px;
+            cursor: pointer;
+            width: fit-content;
         }
 
         .btn-outline-danger:active {
             background: rgba(239, 68, 68, 0.1);
         }
 
-        /* Token Config Gear */
+        /* Settings Gear */
         .settings-header {
             display: flex;
             justify-content: space-between;
@@ -234,11 +199,6 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: color 0.2s;
-        }
-
-        .settings-toggle:hover {
-            color: var(--text-main);
         }
 
         .settings-panel {
@@ -292,7 +252,6 @@
         .job-id {
             font-size: 0.75rem;
             color: var(--text-muted);
-            font-family: monospace;
         }
 
         .job-status {
@@ -304,8 +263,7 @@
         }
 
         .status-queued { background: rgba(245, 158, 11, 0.15); color: var(--accent-warning); }
-        .status-planning { background: rgba(99, 102, 241, 0.15); color: var(--accent-primary); }
-        .status-generating { background: rgba(139, 92, 246, 0.15); color: var(--accent-secondary); animation: pulse-blue 2s infinite; }
+        .status-running { background: rgba(99, 102, 241, 0.15); color: var(--accent-primary); animation: pulse-blue 2s infinite; }
         .status-completed { background: rgba(16, 185, 129, 0.15); color: var(--accent-success); }
         .status-failed { background: rgba(239, 68, 68, 0.15); color: var(--accent-danger); }
 
@@ -395,26 +353,27 @@
     <div class="container">
         <!-- Header -->
         <header>
-            <h1>HS Unlimited AI Video</h1>
-            <div class="subtitle">모바일 비디오 생성 제어판</div>
-            <div class="providers-status" id="providers-status">
-                <!-- Loaded dynamically -->
-            </div>
+            <h1>HS Serverless Video</h1>
+            <div class="subtitle">모바일 비디오 생성 제어판 (완전 서버리스)</div>
         </header>
 
-        <!-- Authorization Settings Card -->
+        <!-- GitHub API Configuration Card -->
         <div class="card">
             <div class="settings-header">
-                <label style="font-size:0.95rem; font-weight:700;">🔐 API 인증 설정</label>
+                <label style="font-size:0.95rem; font-weight:700;">🐙 GitHub 연동 설정</label>
                 <button class="settings-toggle" id="settings-toggle">⚙️</button>
             </div>
             <div id="settings-panel" class="settings-panel" style="display: block;">
                 <div class="form-group">
-                    <label for="api-token">API Token (VIDEO_API_TOKEN)</label>
-                    <input type="password" id="api-token" placeholder="Bearer 토큰을 입력하세요" />
+                    <label for="github-token">GitHub Personal Access Token (PAT)</label>
+                    <input type="password" id="github-token" placeholder="ghp_ 또는 gho_ 토큰을 입력하세요" />
+                </div>
+                <div class="form-group">
+                    <label for="github-repo">GitHub Repository</label>
+                    <input type="text" id="github-repo" value="khs0927/ComfyUI-API" />
                 </div>
                 <div class="form-group" style="font-size: 0.75rem; color: var(--text-muted); margin-top:-8px;">
-                    * 토큰은 브라우저 안전 영역(localStorage)에만 보관됩니다.
+                    * 토큰은 브라우저 안전 영역(localStorage)에만 보관되며, 깃허브 API 호출 시 직접 사용됩니다.
                 </div>
             </div>
         </div>
@@ -474,7 +433,7 @@
                 </div>
 
                 <button type="submit" class="btn btn-primary" id="submit-btn">
-                    🎬 영상 생성 시작하기
+                    🚀 GitHub 원격 생성 요청
                 </button>
             </form>
         </div>
@@ -482,7 +441,7 @@
         <!-- Video History & Queue Card -->
         <div class="card">
             <div class="video-list-header">
-                <span>📋 영상 생성 기록 & 큐</span>
+                <span>📋 원격 생성 기록 & 상태</span>
                 <button class="refresh-btn" id="refresh-btn">새로고침 🔄</button>
             </div>
             <div id="job-list">
@@ -492,20 +451,25 @@
     </div>
 
     <script>
-        // Init state
-        const apiTokenInput = document.getElementById('api-token');
+        // Init DOM references
+        const githubTokenInput = document.getElementById('github-token');
+        const githubRepoInput = document.getElementById('github-repo');
         const settingsToggle = document.getElementById('settings-toggle');
         const settingsPanel = document.getElementById('settings-panel');
-        const providersStatusDiv = document.getElementById('providers-status');
         const videoForm = document.getElementById('video-form');
         const jobListDiv = document.getElementById('job-list');
         const refreshBtn = document.getElementById('refresh-btn');
 
-        // Load token from localStorage
-        const storedToken = localStorage.getItem('video_api_token');
+        // Load config from localStorage
+        const storedToken = localStorage.getItem('gh_video_token');
+        const storedRepo = localStorage.getItem('gh_video_repo');
+        
         if (storedToken) {
-            apiTokenInput.value = storedToken;
-            settingsPanel.style.display = 'none'; // Collapse if token exists
+            githubTokenInput.value = storedToken;
+            settingsPanel.style.display = 'none'; // Collapse if configured
+        }
+        if (storedRepo) {
+            githubRepoInput.value = storedRepo;
         }
 
         // Toggle settings
@@ -514,111 +478,144 @@
             settingsPanel.style.display = isVisible ? 'none' : 'block';
         });
 
-        // Save token on input change
-        apiTokenInput.addEventListener('input', () => {
-            localStorage.setItem('video_api_token', apiTokenInput.value.trim());
+        // Save token and repo on change
+        githubTokenInput.addEventListener('input', () => {
+            localStorage.setItem('gh_video_token', githubTokenInput.value.trim());
+        });
+        githubRepoInput.addEventListener('input', () => {
+            localStorage.setItem('gh_video_repo', githubRepoInput.value.trim());
         });
 
         // Helper: Headers builder
         function getHeaders() {
+            const token = githubTokenInput.value.trim();
             const headers = {
+                'Accept': 'application/vnd.github.v3+json',
                 'Content-Type': 'application/json'
             };
-            const token = apiTokenInput.value.trim();
             if (token) {
-                headers['Authorization'] = `Bearer ${token}`;
+                headers['Authorization'] = `token ${token}`;
             }
             return headers;
         }
 
-        // Fetch Providers Status
-        async function fetchProviders() {
-            try {
-                const res = await fetch('/health', { headers: getHeaders() });
-                if (res.ok) {
-                    const data = await res.json();
-                    renderProviders(data.providers.configured);
-                } else {
-                    providersStatusDiv.innerHTML = '<span style="color:var(--accent-danger); font-size:0.75rem;">인증 실패 (토큰을 확인하세요)</span>';
-                }
-            } catch (err) {
-                providersStatusDiv.innerHTML = '<span style="color:var(--text-muted); font-size:0.75rem;">서버 오프라인</span>';
-            }
-        }
-
-        function renderProviders(configured) {
-            providersStatusDiv.innerHTML = '';
-            for (const [name, isConfigured] of Object.entries(configured)) {
-                if (name === 'modal' && !isConfigured) continue; // Hide reserved modal if not enabled
-                const badge = document.createElement('div');
-                badge.className = `badge ${isConfigured ? 'badge-active' : 'badge-inactive'}`;
-                badge.innerHTML = `<span class="dot"></span>${name.toUpperCase()}`;
-                providersStatusDiv.appendChild(badge);
-            }
-        }
-
-        // Fetch and Render Video Jobs
+        // Fetch Recent Video Issues
         async function fetchJobs() {
+            const repo = githubRepoInput.value.trim();
+            if (!repo) return;
+
             try {
-                const res = await fetch('/v1/videos', { headers: getHeaders() });
+                // Fetch issues starting with [video]
+                const res = await fetch(`https://api.github.com/repos/${repo}/issues?state=all&per_page=20`, {
+                    headers: getHeaders()
+                });
+
                 if (res.ok) {
-                    const jobs = await res.json();
-                    renderJobs(jobs);
-                } else if (res.status === 401) {
-                    jobListDiv.innerHTML = '<div class="empty-state" style="color:var(--accent-danger)">API 토큰 인증이 필요합니다. 상단 설정을 확인해 주세요.</div>';
+                    const issues = await res.json();
+                    const videoIssues = issues.filter(issue => issue.title.startsWith('[video]'));
+                    await renderIssues(videoIssues);
+                } else if (res.status === 401 || res.status === 403) {
+                    jobListDiv.innerHTML = '<div class="empty-state" style="color:var(--accent-danger)">GitHub Token 권한이 없거나 만료되었습니다. 설정을 확인해 주세요.</div>';
                 } else {
                     jobListDiv.innerHTML = '<div class="empty-state">기록을 불러오지 못했습니다.</div>';
                 }
             } catch (err) {
-                jobListDiv.innerHTML = '<div class="empty-state">서버 연결 오류</div>';
+                jobListDiv.innerHTML = '<div class="empty-state">네트워크 오류</div>';
             }
         }
 
-        function renderJobs(jobs) {
-            if (!jobs || jobs.length === 0) {
-                jobListDiv.innerHTML = '<div class="empty-state">등록된 생성 작업이 없습니다.</div>';
+        // Render Issue/Job Cards
+        async function renderIssues(issues) {
+            if (issues.length === 0) {
+                jobListDiv.innerHTML = '<div class="empty-state">생성된 영상 작업이 없습니다.</div>';
                 return;
             }
 
-            // Sort newest first
-            jobs.sort((a, b) => b.created_at - a.created_at);
-
             jobListDiv.innerHTML = '';
-            jobs.forEach(job => {
+            
+            for (const issue of issues) {
                 const card = document.createElement('div');
                 card.className = 'job-card';
+
+                // We will determine status by checking issue state, actions runs or comments
+                let state = issue.state === 'closed' ? 'completed' : 'queued';
+                let message = '대기 중...';
+                let progressVal = 0;
+                let videoUrl = null;
+                let runUrl = null;
+
+                // Load comments to see if action posted progress or completion details
+                try {
+                    const commentsRes = await fetch(issue.comments_url, { headers: getHeaders() });
+                    if (commentsRes.ok) {
+                        const comments = await commentsRes.json();
+                        
+                        // Parse comments for updates
+                        for (const comment of comments) {
+                            const body = comment.body || '';
+                            if (body.includes('원격 영상 작업을 시작했습니다')) {
+                                state = 'running';
+                                message = '비디오 생성 엔진 시작됨';
+                                progressVal = 10;
+                                const runMatch = body.match(/actions\/runs\/(\d+)/);
+                                if (runMatch) {
+                                    runUrl = body.substring(body.indexOf('https://'));
+                                }
+                            }
+                            if (body.includes('영상 생성이 완료되었습니다')) {
+                                state = 'completed';
+                                message = '생성 완료';
+                                progressVal = 100;
+                                const urlMatch = body.match(/https:\/\/raw\.githubusercontent\.com[^\s]+/);
+                                if (urlMatch) {
+                                    videoUrl = urlMatch[0];
+                                }
+                            }
+                            if (body.includes('영상 작업이 실패했습니다')) {
+                                state = 'failed';
+                                message = '작업 실패 (GPU 할당량 또는 비밀키 확인)';
+                                progressVal = 0;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to load comments', e);
+                }
+
+                // If closed but no video URL was successfully parsed, treat it as failed or closed without artifacts
+                if (issue.state === 'closed' && state !== 'completed' && state !== 'failed') {
+                    state = 'failed';
+                    message = '비정상 종료';
+                }
 
                 const meta = document.createElement('div');
                 meta.className = 'job-meta';
                 meta.innerHTML = `
-                    <span class="job-id">Job: ${job.id.substring(0, 8)}...</span>
-                    <span class="job-status status-${job.state}">${job.state}</span>
+                    <span class="job-id">이슈 #${issue.number}</span>
+                    <span class="job-status status-${state}">${state}</span>
                 `;
                 card.appendChild(meta);
 
                 const prompt = document.createElement('div');
                 prompt.className = 'job-prompt';
-                prompt.textContent = job.prompt;
+                prompt.textContent = issue.title.replace('[video]', '').trim();
                 card.appendChild(prompt);
 
                 const details = document.createElement('div');
                 details.className = 'job-details';
-                const formattedTime = new Date(job.created_at * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const formattedTime = new Date(issue.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 details.innerHTML = `
                     <span>🕒 ${formattedTime}</span>
-                    <span>⏱️ ${job.target_duration_minutes}분</span>
-                    <span>📐 ${job.aspect_ratio}</span>
+                    <span>💬 댓글 ${issue.comments}개</span>
                 `;
                 card.appendChild(details);
 
                 // Progress Bar (if running/queued)
-                if (['queued', 'planning', 'generating'].includes(job.state)) {
-                    const progressVal = Math.round(job.progress * 100);
-                    
+                if (['queued', 'running'].includes(state)) {
                     const textRow = document.createElement('div');
                     textRow.className = 'progress-text';
                     textRow.innerHTML = `
-                        <span>${job.message || '준비 중'}</span>
+                        <span>${message}</span>
                         <span>${progressVal}%</span>
                     `;
                     card.appendChild(textRow);
@@ -628,7 +625,48 @@
                     pContainer.innerHTML = `<div class="progress-bar" style="width: ${progressVal}%"></div>`;
                     card.appendChild(pContainer);
 
-                    // Cancel Button
+                    // Add button to check Actions log
+                    if (runUrl) {
+                        const linkRow = document.createElement('div');
+                        linkRow.style.marginTop = '8px';
+                        const a = document.createElement('a');
+                        a.href = runUrl;
+                        a.target = '_blank';
+                        a.className = 'download-link';
+                        a.style.background = 'rgba(99, 102, 241, 0.05)';
+                        a.innerHTML = '🔍 Actions 로그 실시간 보기';
+                        linkRow.appendChild(a);
+                        card.appendChild(linkRow);
+                    }
+                }
+
+                // Video Player & Download link (if completed)
+                if (state === 'completed' && videoUrl) {
+                    const player = document.createElement('video');
+                    player.src = videoUrl;
+                    player.controls = true;
+                    player.preload = 'metadata';
+                    player.playsInline = true;
+                    card.appendChild(player);
+
+                    const dLink = document.createElement('a');
+                    dLink.href = videoUrl;
+                    dLink.className = 'download-link';
+                    dLink.innerHTML = '💾 비디오 다운로드';
+                    dLink.download = `video-${issue.number}.mp4`;
+                    card.appendChild(dLink);
+                }
+
+                // If failed, show check actions link
+                if (state === 'failed') {
+                    const textRow = document.createElement('div');
+                    textRow.className = 'progress-text';
+                    textRow.innerHTML = `<span style="color:var(--accent-danger);">${message}</span>`;
+                    card.appendChild(textRow);
+                }
+
+                // Close Issue button if open (to cancel)
+                if (issue.state === 'open') {
                     const actionsRow = document.createElement('div');
                     actionsRow.style.marginTop = '8px';
                     actionsRow.style.display = 'flex';
@@ -636,75 +674,57 @@
                     
                     const cancelBtn = document.createElement('button');
                     cancelBtn.className = 'btn-outline-danger';
-                    cancelBtn.textContent = '⛔ 작업 취소';
-                    cancelBtn.onclick = () => cancelJob(job.id);
+                    cancelBtn.textContent = '⛔ 생성 중단 (이슈 닫기)';
+                    cancelBtn.onclick = () => closeIssue(issue.number);
                     actionsRow.appendChild(cancelBtn);
                     card.appendChild(actionsRow);
                 }
 
-                // Video Player (if completed)
-                if (job.state === 'completed') {
-                    // /outputs static directory serves the completed MP4 directly
-                    const videoSrc = `/outputs/${job.id}.mp4`;
-                    
-                    const player = document.createElement('video');
-                    player.src = videoSrc;
-                    player.controls = true;
-                    player.preload = 'metadata';
-                    player.playsInline = true;
-                    card.appendChild(player);
-
-                    const dLink = document.createElement('a');
-                    dLink.href = `/v1/videos/${job.id}/download`;
-                    dLink.className = 'download-link';
-                    dLink.innerHTML = '💾 비디오 다운로드';
-                    // custom download endpoint works, but also public static outputs link
-                    dLink.onclick = (e) => {
-                        // If token is required, we can download via fetch or simply download the public static link
-                        const token = apiTokenInput.value.trim();
-                        if (token) {
-                            // Download via static route to avoid CORS header issues for standard anchor clicks
-                            dLink.href = `/outputs/${job.id}.mp4`;
-                        }
-                    };
-                    card.appendChild(dLink);
-                }
-
                 jobListDiv.appendChild(card);
-            });
+            }
         }
 
-        // Cancel Job Function
-        async function cancelJob(jobId) {
-            if (!confirm('이 비디오 생성 작업을 취소하시겠습니까?')) return;
+        // Close Issue (Cancel Job)
+        async function closeIssue(number) {
+            const repo = githubRepoInput.value.trim();
+            if (!confirm('이 영상 생성을 중단하시겠습니까? (이슈가 닫히면 빌드가 중단됩니다)')) return;
             try {
-                const res = await fetch(`/v1/videos/${jobId}/cancel`, {
-                    method: 'POST',
-                    headers: getHeaders()
+                const res = await fetch(`https://api.github.com/repos/${repo}/issues/${number}`, {
+                    method: 'PATCH',
+                    headers: getHeaders(),
+                    body: JSON.stringify({ state: 'closed' })
                 });
                 if (res.ok) {
-                    alert('작업이 성공적으로 취소되었습니다.');
+                    alert('성공적으로 중단되었습니다.');
                     fetchJobs();
                 } else {
-                    alert('작업 취소에 실패했습니다.');
+                    alert('중단 요청에 실패했습니다.');
                 }
             } catch (err) {
                 alert('네트워크 오류');
             }
         }
 
-        // Form Submit handler
+        // Form Submit Handler (Create Issue)
         videoForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            const repo = githubRepoInput.value.trim();
+            const token = githubTokenInput.value.trim();
+            if (!token) {
+                alert('GitHub Token을 먼저 입력해 주세요.');
+                settingsPanel.style.display = 'block';
+                return;
+            }
+
             const submitBtn = document.getElementById('submit-btn');
             submitBtn.disabled = true;
-            submitBtn.textContent = '⏳ 요청 전송 중...';
+            submitBtn.textContent = '⏳ GitHub 이슈 생성 중...';
 
             const requestData = {
                 prompt: document.getElementById('prompt').value.trim(),
                 script: document.getElementById('script').value.trim() || undefined,
                 target_duration_minutes: parseFloat(document.getElementById('duration').value),
-                scene_seconds: 90, // default scene segment size
+                scene_seconds: 90,
                 provider: document.getElementById('provider').value,
                 aspect_ratio: document.getElementById('aspect-ratio').value,
                 width: 960,
@@ -712,7 +732,7 @@
                 fps: parseInt(document.getElementById('fps').value)
             };
 
-            // Custom resolutions for aspect ratios
+            // Calculate resolutions
             if (requestData.aspect_ratio === '9:16') {
                 requestData.width = 544;
                 requestData.height = 960;
@@ -721,46 +741,43 @@
                 requestData.height = 720;
             }
 
+            const issueTitle = `[video] ${requestData.prompt.substring(0, 30)}...`;
+            const issueBody = `\`\`\`json\n${JSON.stringify(requestData, null, 2)}\n\`\`\``;
+
             try {
-                const res = await fetch('/v1/videos', {
+                const res = await fetch(`https://api.github.com/repos/${repo}/issues`, {
                     method: 'POST',
                     headers: getHeaders(),
-                    body: JSON.stringify(requestData)
+                    body: JSON.stringify({
+                        title: issueTitle,
+                        body: issueBody
+                    })
                 });
 
                 if (res.ok) {
-                    // Clear inputs
                     document.getElementById('prompt').value = '';
                     document.getElementById('script').value = '';
-                    // Collapse settings panel if open
                     settingsPanel.style.display = 'none';
-                    // Update
                     fetchJobs();
-                    alert('비디오 생성 요청이 성공적으로 접수되었습니다!');
-                } else if (res.status === 401) {
-                    alert('인증 오류: 올바른 API 토큰을 입력해 주세요.');
+                    alert('성공적으로 영상 생성이 요청되었습니다! (잠시 후 깃허브 Actions 빌드가 자동으로 시작됩니다)');
                 } else {
                     const data = await res.json();
-                    alert(`오류 발생: ${data.detail || '요청 처리에 실패했습니다.'}`);
+                    alert(`요청 오류: ${data.message || '이슈 생성을 하지 못했습니다.'}`);
                 }
             } catch (err) {
-                alert('네트워크 오류: 서버와 통신할 수 없습니다.');
+                alert('네트워크 오류');
             } finally {
                 submitBtn.disabled = false;
-                submitBtn.textContent = '🎬 영상 생성 시작하기';
+                submitBtn.textContent = '🚀 GitHub 원격 생성 요청';
             }
         });
 
-        // Refresh buttons
-        refreshBtn.addEventListener('click', () => {
-            fetchProviders();
-            fetchJobs();
-        });
+        // Refresh triggers
+        refreshBtn.addEventListener('click', fetchJobs);
 
-        // Initialize lists & loop polling (every 5 seconds)
-        fetchProviders();
+        // Init & Poll every 10 seconds (higher timeout to avoid GitHub rate limits)
         fetchJobs();
-        setInterval(fetchJobs, 5000);
+        setInterval(fetchJobs, 10000);
     </script>
 </body>
 </html>

@@ -42,7 +42,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: remote-video-generation
@@ -147,6 +147,27 @@ jobs:
           fi
           python scripts/run_remote_video_job.py "${args[@]}"
 
+      - name: Publish video to video-outputs branch
+        env:
+          OUTPUT_PATH: ${{ steps.video.outputs.output_path }}
+          JOB_ID: ${{ steps.video.outputs.job_id }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git clone --depth 1 --branch video-outputs https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git video-repo || {
+            git clone --depth 1 https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git video-repo
+            cd video-repo
+            git checkout --orphan video-outputs
+            git rm -rf .
+            cd ..
+          }
+          cd video-repo
+          mkdir -p outputs
+          cp "$OUTPUT_PATH" "outputs/${JOB_ID}.mp4"
+          git add "outputs/${JOB_ID}.mp4"
+          git commit -m "Upload video ${JOB_ID}"
+          git push origin video-outputs
+
       - name: Upload completed MP4
         uses: actions/upload-artifact@v4
         with:
@@ -162,5 +183,5 @@ jobs:
             echo "- Provider request: ${{ inputs.provider }}"
             echo "- Duration: ${{ inputs.minutes }} minutes"
             echo "- Job ID: ${{ steps.video.outputs.job_id }}"
-            echo "- Download the MP4 from this workflow run's Artifacts section."
+            echo "- Direct Video URL: https://raw.githubusercontent.com/${{ github.repository }}/video-outputs/outputs/${{ steps.video.outputs.job_id }}.mp4"
           } >> "$GITHUB_STEP_SUMMARY"
