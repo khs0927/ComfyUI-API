@@ -19,7 +19,7 @@ async def main() -> int:
     parser.add_argument("--prompt")
     parser.add_argument("--script-file")
     parser.add_argument("--minutes", type=float)
-    parser.add_argument("--scene-seconds", type=int, default=30)
+    parser.add_argument("--scene-seconds", type=int, default=90)
     parser.add_argument("--provider", default="auto")
     parser.add_argument("--aspect-ratio", default="16:9")
     parser.add_argument("--width", type=int, default=960)
@@ -49,6 +49,20 @@ async def main() -> int:
             height=args.height,
             fps=args.fps,
         )
+
+    max_minutes = float(os.getenv("REMOTE_JOB_MAX_MINUTES", "0"))
+    requested_minutes = request.target_duration_minutes
+    if requested_minutes is None:
+        requested_minutes = LongVideoOrchestrator().planner.estimate_minutes(
+            request.script or request.prompt
+        )
+    if max_minutes > 0 and requested_minutes > max_minutes:
+        print(
+            f"Requested duration {requested_minutes:.2f} minutes exceeds "
+            f"REMOTE_JOB_MAX_MINUTES={max_minutes:.2f}",
+            file=sys.stderr,
+        )
+        return 6
 
     engine = LongVideoOrchestrator(os.getenv("VIDEO_DATA_ROOT", "./video-data"))
     job = await engine.create(request)
