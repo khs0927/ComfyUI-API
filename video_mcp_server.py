@@ -11,21 +11,47 @@ mcp = FastMCP("HS Unlimited AI Video")
 engine = LongVideoOrchestrator()
 
 
+def _provider_status() -> dict:
+    order = [
+        item.strip()
+        for item in os.getenv(
+            "VIDEO_PROVIDER_ORDER", "beam,kaggle,hf,helios,wan21,comfyui"
+        ).split(",")
+        if item.strip()
+    ]
+    configured = {
+        "beam": bool(os.getenv("BEAM_TASK_QUEUE_URL") and os.getenv("BEAM_TOKEN")),
+        "kaggle": bool(os.getenv("KAGGLE_KERNEL_ID")),
+        "hf": bool(os.getenv("HF_VIDEO_SPACE_ID")),
+        "helios": bool(os.getenv("HELIOS_ROOT")),
+        "wan21": bool(os.getenv("WAN21_ROOT")),
+        "comfyui": bool(
+            os.getenv("COMFYUI_URL") and os.getenv("COMFYUI_VIDEO_WORKFLOW")
+        ),
+        "modal": os.getenv("MODAL_ENABLED", "false").lower() == "true",
+    }
+    return {
+        "order": order,
+        "configured": configured,
+        "active_order": [name for name in order if configured.get(name, False)],
+        "modal_reserved": True,
+    }
+
+
 @mcp.tool()
 async def create_long_video(
     prompt: str,
     script: str = "",
     target_duration_minutes: float | None = None,
-    scene_seconds: int = 8,
+    scene_seconds: int = 30,
     provider: str = "auto",
     aspect_ratio: str = "16:9",
-    width: int = 1280,
-    height: int = 720,
+    width: int = 960,
+    height: int = 544,
     fps: int = 24,
     style: str = "cinematic, coherent characters, natural motion",
-    native_audio: bool = True,
 ) -> dict:
-    """Start a scene-based AI video job. Final duration has no fixed application limit."""
+    """Start a scene-based AI video job using the configured free provider chain."""
     request = VideoRequest(
         prompt=prompt,
         script=script or None,
@@ -37,7 +63,6 @@ async def create_long_video(
         height=height,
         fps=fps,
         style=style,
-        native_audio=native_audio,
     )
     job = await engine.create(request)
     return {
@@ -45,6 +70,7 @@ async def create_long_video(
         "state": job.state,
         "message": job.message,
         "status_tool": "get_video_status",
+        "providers": _provider_status(),
     }
 
 
@@ -67,7 +93,11 @@ async def get_video_status(job_id: str) -> dict:
 async def cancel_video(job_id: str) -> dict:
     """Cancel a queued or running long-form video job."""
     job = await engine.cancel(job_id)
-    return {"cancelled": bool(job), "job_id": job_id, "state": job.state if job else None}
+    return {
+        "cancelled": bool(job),
+        "job_id": job_id,
+        "state": job.state if job else None,
+    }
 
 
 @mcp.tool()
@@ -75,9 +105,9 @@ async def estimate_video_plan(
     prompt: str,
     script: str = "",
     target_duration_minutes: float | None = None,
-    scene_seconds: int = 8,
+    scene_seconds: int = 30,
 ) -> dict:
-    """Estimate scene count and generation workload without starting a paid or GPU job."""
+    """Estimate scene count and workload without starting a GPU job."""
     request = VideoRequest(
         prompt=prompt,
         script=script or None,
@@ -90,8 +120,15 @@ async def estimate_video_plan(
         "scene_count": len(scenes),
         "estimated_duration_seconds": sum(scene.duration_seconds for scene in scenes),
         "scene_seconds": scene_seconds,
-        "note": "Generation time and provider cost depend on the selected backend.",
+        "provider_order": _provider_status()["active_order"],
+        "note": "Generation time depends on free quota, queueing, and available GPU hardware.",
     }
+
+
+@mcp.tool()
+async def get_video_provider_status() -> dict:
+    """Show which Beam, Kaggle, Hugging Face, and local backends are configured."""
+    return _provider_status()
 
 
 if __name__ == "__main__":
