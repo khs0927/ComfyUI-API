@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from scripts.parse_video_issue import extract_payload
 from video_engine import VideoRequest
 from video_engine.core import HeliosProvider, ScenePlan, ScenePlanner
 from video_engine.hf_presets import PRESETS, apply_hf_preset_env, build_inputs
@@ -147,3 +148,28 @@ def test_hf_helios_input_schema_matches_space_source():
     assert values[6] in {198, 231}
     assert values[8] == 42
     assert len(values) == 10
+
+
+def test_issue_json_request_accepts_long_remote_job():
+    body = """
+```json
+{
+  "prompt": "A coherent documentary about hope",
+  "script": "희망의 이야기입니다.",
+  "target_duration_minutes": 20,
+  "scene_seconds": 30,
+  "provider": "auto",
+  "aspect_ratio": "16:9"
+}
+```
+"""
+    request = VideoRequest.model_validate(extract_payload(body))
+    scenes = ScenePlanner().plan(request)
+    assert request.target_duration_minutes == 20
+    assert len(scenes) == 40
+    assert sum(scene.duration_seconds for scene in scenes) == 1200
+
+
+def test_issue_parser_rejects_non_json_body():
+    with pytest.raises(json.JSONDecodeError):
+        extract_payload("please make a video")
