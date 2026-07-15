@@ -53,6 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
+      PYTHONPATH: ${{ github.workspace }}
       VIDEO_DATA_ROOT: ${{ github.workspace }}/video-data
       VIDEO_PROVIDER_ORDER: beam,kaggle,hf
       VIDEO_SCENE_PARALLELISM: "1"
