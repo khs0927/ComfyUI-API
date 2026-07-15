@@ -1,0 +1,37 @@
+name: Video controller CI
+
+on:
+  push:
+    branches:
+      - agent/unlimited-ai-video-mcp
+  pull_request:
+    paths:
+      - "video_engine/**"
+      - "workers/**"
+      - "tests/**"
+      - "video_api.py"
+      - "video_mcp_server.py"
+      - "requirements-video.txt"
+      - ".github/workflows/video-controller.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install -r requirements-video.txt pytest ruff
+      - name: Compile and lint
+        run: |
+          ruff check --select E9,F63,F7,F82 video_engine video_api.py video_mcp_server.py tests workers
+          python -m compileall -q video_engine video_api.py video_mcp_server.py tests workers
+      - name: Test
+        run: pytest -q tests
