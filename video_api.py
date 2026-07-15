@@ -33,6 +33,15 @@ engine.output_root.mkdir(parents=True, exist_ok=True)
 app.mount("/outputs", StaticFiles(directory=str(engine.output_root)), name="outputs")
 
 
+@app.get("/", response_class=FileResponse)
+async def serve_dashboard():
+    html_path = Path(__file__).parent / "static" / "index.html"
+    if not html_path.exists():
+        raise HTTPException(status_code=404, detail="Dashboard UI file not found")
+    return FileResponse(html_path)
+
+
+
 def authorize(authorization: str | None) -> None:
     expected = os.getenv("VIDEO_API_TOKEN")
     if not expected:

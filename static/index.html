@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>HS Unlimited AI Video Dashboard</title>
+    <!-- Google Fonts: Outfit & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(17, 24, 39, 0.6);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --accent-primary: #6366f1; /* Indigo */
+            --accent-secondary: #8b5cf6; /* Violet */
+            --accent-success: #10b981; /* Emerald */
+            --accent-warning: #f59e0b; /* Amber */
+            --accent-danger: #ef4444; /* Rose */
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --font-outfit: 'Outfit', 'Inter', sans-serif;
+            --font-inter: 'Inter', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-inter);
+            min-height: 100vh;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.08) 0%, transparent 40%);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 480px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding-bottom: 40px;
+        }
+
+        /* Glassmorphism Card Style */
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Header Style */
+        header {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        h1 {
+            font-family: var(--font-outfit);
+            font-size: 1.8rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a5b4fc 0%, #c084fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Provider Badges */
+        .providers-status {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .badge-active {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent-success);
+        }
+
+        .badge-inactive {
+            background: rgba(156, 163, 175, 0.05);
+            color: var(--text-muted);
+        }
+
+        .badge .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: currentColor;
+        }
+
+        /* Form Inputs */
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-main);
+            letter-spacing: 0.2px;
+        }
+
+        textarea, input[type="text"], input[type="password"], select {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            color: var(--text-main);
+            padding: 12px;
+            font-family: var(--font-inter);
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        textarea:focus, input[type="text"]:focus, input[type="password"]:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+        }
+
+        textarea {
+            resize: none;
+            height: 80px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            font-family: var(--font-outfit);
+            font-size: 1rem;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: scale(0.98);
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+        }
+
+        .btn-outline-danger {
+            background: transparent;
+            border: 1px solid var(--accent-danger);
+            color: var(--accent-danger);
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            border-radius: 8px;
+        }
+
+        .btn-outline-danger:active {
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        /* Token Config Gear */
+        .settings-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .settings-toggle {
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+
+        .settings-toggle:hover {
+            color: var(--text-main);
+        }
+
+        .settings-panel {
+            display: none;
+            border-top: 1px solid var(--border-color);
+            padding-top: 16px;
+            margin-top: 12px;
+        }
+
+        /* Video List Items */
+        .video-list-header {
+            font-family: var(--font-outfit);
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .refresh-btn {
+            background: none;
+            border: none;
+            color: var(--accent-primary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .job-card {
+            background: rgba(0, 0, 0, 0.15);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .job-card:last-child {
+            margin-bottom: 0;
+        }
+
+        .job-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+
+        .job-id {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: monospace;
+        }
+
+        .job-status {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 6px;
+            text-transform: uppercase;
+        }
+
+        .status-queued { background: rgba(245, 158, 11, 0.15); color: var(--accent-warning); }
+        .status-planning { background: rgba(99, 102, 241, 0.15); color: var(--accent-primary); }
+        .status-generating { background: rgba(139, 92, 246, 0.15); color: var(--accent-secondary); animation: pulse-blue 2s infinite; }
+        .status-completed { background: rgba(16, 185, 129, 0.15); color: var(--accent-success); }
+        .status-failed { background: rgba(239, 68, 68, 0.15); color: var(--accent-danger); }
+
+        .job-prompt {
+            font-size: 0.9rem;
+            line-height: 1.4;
+            color: var(--text-main);
+            word-break: break-word;
+        }
+
+        .job-details {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            gap: 12px;
+        }
+
+        /* Progress Bar */
+        .progress-container {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Inline Video Player */
+        video {
+            width: 100%;
+            border-radius: 8px;
+            margin-top: 8px;
+            border: 1px solid var(--border-color);
+            background: black;
+        }
+
+        .download-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--accent-primary);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            border-radius: 8px;
+            font-weight: 600;
+            width: fit-content;
+            margin-top: 4px;
+            transition: background 0.2s;
+        }
+
+        .download-link:active {
+            background: rgba(99, 102, 241, 0.2);
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            padding: 20px 0;
+        }
+
+        @keyframes pulse-blue {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>HS Unlimited AI Video</h1>
+            <div class="subtitle">모바일 비디오 생성 제어판</div>
+            <div class="providers-status" id="providers-status">
+                <!-- Loaded dynamically -->
+            </div>
+        </header>
+
+        <!-- Authorization Settings Card -->
+        <div class="card">
+            <div class="settings-header">
+                <label style="font-size:0.95rem; font-weight:700;">🔐 API 인증 설정</label>
+                <button class="settings-toggle" id="settings-toggle">⚙️</button>
+            </div>
+            <div id="settings-panel" class="settings-panel" style="display: block;">
+                <div class="form-group">
+                    <label for="api-token">API Token (VIDEO_API_TOKEN)</label>
+                    <input type="password" id="api-token" placeholder="Bearer 토큰을 입력하세요" />
+                </div>
+                <div class="form-group" style="font-size: 0.75rem; color: var(--text-muted); margin-top:-8px;">
+                    * 토큰은 브라우저 안전 영역(localStorage)에만 보관됩니다.
+                </div>
+            </div>
+        </div>
+
+        <!-- Request Form Card -->
+        <div class="card">
+            <form id="video-form">
+                <div class="form-group">
+                    <label for="prompt">비주얼 프롬프트 (Visual Prompt)</label>
+                    <textarea id="prompt" placeholder="생성할 영상의 세부 묘사를 영어로 작성해 주세요..." required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="script">나레이션/스크립트 (선택 사항)</label>
+                    <textarea id="script" placeholder="나레이션이 필요한 경우 텍스트를 입력해 주세요..."></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="provider">비디오 공급자</label>
+                        <select id="provider">
+                            <option value="auto" selected>자동 (Auto Fallback)</option>
+                            <option value="beam">Beam Cloud</option>
+                            <option value="kaggle">Kaggle GPU</option>
+                            <option value="hf">Hugging Face</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="duration">총 길이 (분)</label>
+                        <select id="duration">
+                            <option value="0.1">5초 (테스트용)</option>
+                            <option value="0.5">30초</option>
+                            <option value="1.0" selected>1분 (표준)</option>
+                            <option value="3.0">3분</option>
+                            <option value="5.0">5분</option>
+                            <option value="10.0">10분</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="aspect-ratio">화면 비율</label>
+                        <select id="aspect-ratio">
+                            <option value="16:9" selected>가로형 (16:9)</option>
+                            <option value="9:16">세로형 (9:16)</option>
+                            <option value="1:1">정사각형 (1:1)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="fps">초당 프레임 (FPS)</label>
+                        <select id="fps">
+                            <option value="24" selected>24 FPS</option>
+                            <option value="30">30 FPS</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="submit-btn">
+                    🎬 영상 생성 시작하기
+                </button>
+            </form>
+        </div>
+
+        <!-- Video History & Queue Card -->
+        <div class="card">
+            <div class="video-list-header">
+                <span>📋 영상 생성 기록 & 큐</span>
+                <button class="refresh-btn" id="refresh-btn">새로고침 🔄</button>
+            </div>
+            <div id="job-list">
+                <div class="empty-state">로딩 중...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Init state
+        const apiTokenInput = document.getElementById('api-token');
+        const settingsToggle = document.getElementById('settings-toggle');
+        const settingsPanel = document.getElementById('settings-panel');
+        const providersStatusDiv = document.getElementById('providers-status');
+        const videoForm = document.getElementById('video-form');
+        const jobListDiv = document.getElementById('job-list');
+        const refreshBtn = document.getElementById('refresh-btn');
+
+        // Load token from localStorage
+        const storedToken = localStorage.getItem('video_api_token');
+        if (storedToken) {
+            apiTokenInput.value = storedToken;
+            settingsPanel.style.display = 'none'; // Collapse if token exists
+        }
+
+        // Toggle settings
+        settingsToggle.addEventListener('click', () => {
+            const isVisible = settingsPanel.style.display !== 'none';
+            settingsPanel.style.display = isVisible ? 'none' : 'block';
+        });
+
+        // Save token on input change
+        apiTokenInput.addEventListener('input', () => {
+            localStorage.setItem('video_api_token', apiTokenInput.value.trim());
+        });
+
+        // Helper: Headers builder
+        function getHeaders() {
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            const token = apiTokenInput.value.trim();
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            return headers;
+        }
+
+        // Fetch Providers Status
+        async function fetchProviders() {
+            try {
+                const res = await fetch('/health', { headers: getHeaders() });
+                if (res.ok) {
+                    const data = await res.json();
+                    renderProviders(data.providers.configured);
+                } else {
+                    providersStatusDiv.innerHTML = '<span style="color:var(--accent-danger); font-size:0.75rem;">인증 실패 (토큰을 확인하세요)</span>';
+                }
+            } catch (err) {
+                providersStatusDiv.innerHTML = '<span style="color:var(--text-muted); font-size:0.75rem;">서버 오프라인</span>';
+            }
+        }
+
+        function renderProviders(configured) {
+            providersStatusDiv.innerHTML = '';
+            for (const [name, isConfigured] of Object.entries(configured)) {
+                if (name === 'modal' && !isConfigured) continue; // Hide reserved modal if not enabled
+                const badge = document.createElement('div');
+                badge.className = `badge ${isConfigured ? 'badge-active' : 'badge-inactive'}`;
+                badge.innerHTML = `<span class="dot"></span>${name.toUpperCase()}`;
+                providersStatusDiv.appendChild(badge);
+            }
+        }
+
+        // Fetch and Render Video Jobs
+        async function fetchJobs() {
+            try {
+                const res = await fetch('/v1/videos', { headers: getHeaders() });
+                if (res.ok) {
+                    const jobs = await res.json();
+                    renderJobs(jobs);
+                } else if (res.status === 401) {
+                    jobListDiv.innerHTML = '<div class="empty-state" style="color:var(--accent-danger)">API 토큰 인증이 필요합니다. 상단 설정을 확인해 주세요.</div>';
+                } else {
+                    jobListDiv.innerHTML = '<div class="empty-state">기록을 불러오지 못했습니다.</div>';
+                }
+            } catch (err) {
+                jobListDiv.innerHTML = '<div class="empty-state">서버 연결 오류</div>';
+            }
+        }
+
+        function renderJobs(jobs) {
+            if (!jobs || jobs.length === 0) {
+                jobListDiv.innerHTML = '<div class="empty-state">등록된 생성 작업이 없습니다.</div>';
+                return;
+            }
+
+            // Sort newest first
+            jobs.sort((a, b) => b.created_at - a.created_at);
+
+            jobListDiv.innerHTML = '';
+            jobs.forEach(job => {
+                const card = document.createElement('div');
+                card.className = 'job-card';
+
+                const meta = document.createElement('div');
+                meta.className = 'job-meta';
+                meta.innerHTML = `
+                    <span class="job-id">Job: ${job.id.substring(0, 8)}...</span>
+                    <span class="job-status status-${job.state}">${job.state}</span>
+                `;
+                card.appendChild(meta);
+
+                const prompt = document.createElement('div');
+                prompt.className = 'job-prompt';
+                prompt.textContent = job.prompt;
+                card.appendChild(prompt);
+
+                const details = document.createElement('div');
+                details.className = 'job-details';
+                const formattedTime = new Date(job.created_at * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                details.innerHTML = `
+                    <span>🕒 ${formattedTime}</span>
+                    <span>⏱️ ${job.target_duration_minutes}분</span>
+                    <span>📐 ${job.aspect_ratio}</span>
+                `;
+                card.appendChild(details);
+
+                // Progress Bar (if running/queued)
+                if (['queued', 'planning', 'generating'].includes(job.state)) {
+                    const progressVal = Math.round(job.progress * 100);
+                    
+                    const textRow = document.createElement('div');
+                    textRow.className = 'progress-text';
+                    textRow.innerHTML = `
+                        <span>${job.message || '준비 중'}</span>
+                        <span>${progressVal}%</span>
+                    `;
+                    card.appendChild(textRow);
+
+                    const pContainer = document.createElement('div');
+                    pContainer.className = 'progress-container';
+                    pContainer.innerHTML = `<div class="progress-bar" style="width: ${progressVal}%"></div>`;
+                    card.appendChild(pContainer);
+
+                    // Cancel Button
+                    const actionsRow = document.createElement('div');
+                    actionsRow.style.marginTop = '8px';
+                    actionsRow.style.display = 'flex';
+                    actionsRow.style.justifyContent = 'flex-end';
+                    
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.className = 'btn-outline-danger';
+                    cancelBtn.textContent = '⛔ 작업 취소';
+                    cancelBtn.onclick = () => cancelJob(job.id);
+                    actionsRow.appendChild(cancelBtn);
+                    card.appendChild(actionsRow);
+                }
+
+                // Video Player (if completed)
+                if (job.state === 'completed') {
+                    // /outputs static directory serves the completed MP4 directly
+                    const videoSrc = `/outputs/${job.id}.mp4`;
+                    
+                    const player = document.createElement('video');
+                    player.src = videoSrc;
+                    player.controls = true;
+                    player.preload = 'metadata';
+                    player.playsInline = true;
+                    card.appendChild(player);
+
+                    const dLink = document.createElement('a');
+                    dLink.href = `/v1/videos/${job.id}/download`;
+                    dLink.className = 'download-link';
+                    dLink.innerHTML = '💾 비디오 다운로드';
+                    // custom download endpoint works, but also public static outputs link
+                    dLink.onclick = (e) => {
+                        // If token is required, we can download via fetch or simply download the public static link
+                        const token = apiTokenInput.value.trim();
+                        if (token) {
+                            // Download via static route to avoid CORS header issues for standard anchor clicks
+                            dLink.href = `/outputs/${job.id}.mp4`;
+                        }
+                    };
+                    card.appendChild(dLink);
+                }
+
+                jobListDiv.appendChild(card);
+            });
+        }
+
+        // Cancel Job Function
+        async function cancelJob(jobId) {
+            if (!confirm('이 비디오 생성 작업을 취소하시겠습니까?')) return;
+            try {
+                const res = await fetch(`/v1/videos/${jobId}/cancel`, {
+                    method: 'POST',
+                    headers: getHeaders()
+                });
+                if (res.ok) {
+                    alert('작업이 성공적으로 취소되었습니다.');
+                    fetchJobs();
+                } else {
+                    alert('작업 취소에 실패했습니다.');
+                }
+            } catch (err) {
+                alert('네트워크 오류');
+            }
+        }
+
+        // Form Submit handler
+        videoForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ 요청 전송 중...';
+
+            const requestData = {
+                prompt: document.getElementById('prompt').value.trim(),
+                script: document.getElementById('script').value.trim() || undefined,
+                target_duration_minutes: parseFloat(document.getElementById('duration').value),
+                scene_seconds: 90, // default scene segment size
+                provider: document.getElementById('provider').value,
+                aspect_ratio: document.getElementById('aspect-ratio').value,
+                width: 960,
+                height: 544,
+                fps: parseInt(document.getElementById('fps').value)
+            };
+
+            // Custom resolutions for aspect ratios
+            if (requestData.aspect_ratio === '9:16') {
+                requestData.width = 544;
+                requestData.height = 960;
+            } else if (requestData.aspect_ratio === '1:1') {
+                requestData.width = 720;
+                requestData.height = 720;
+            }
+
+            try {
+                const res = await fetch('/v1/videos', {
+                    method: 'POST',
+                    headers: getHeaders(),
+                    body: JSON.stringify(requestData)
+                });
+
+                if (res.ok) {
+                    // Clear inputs
+                    document.getElementById('prompt').value = '';
+                    document.getElementById('script').value = '';
+                    // Collapse settings panel if open
+                    settingsPanel.style.display = 'none';
+                    // Update
+                    fetchJobs();
+                    alert('비디오 생성 요청이 성공적으로 접수되었습니다!');
+                } else if (res.status === 401) {
+                    alert('인증 오류: 올바른 API 토큰을 입력해 주세요.');
+                } else {
+                    const data = await res.json();
+                    alert(`오류 발생: ${data.detail || '요청 처리에 실패했습니다.'}`);
+                }
+            } catch (err) {
+                alert('네트워크 오류: 서버와 통신할 수 없습니다.');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🎬 영상 생성 시작하기';
+            }
+        });
+
+        // Refresh buttons
+        refreshBtn.addEventListener('click', () => {
+            fetchProviders();
+            fetchJobs();
+        });
+
+        // Initialize lists & loop polling (every 5 seconds)
+        fetchProviders();
+        fetchJobs();
+        setInterval(fetchJobs, 5000);
+    </script>
+</body>
+</html>
