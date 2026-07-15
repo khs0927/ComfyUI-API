@@ -6,3 +6,5 @@ mcp>=1.9
 python-multipart>=0.0.12
 sse-starlette>=2.1
 huggingface-hub>=0.30
+gradio-client>=1.7
+kaggle>=2.0
