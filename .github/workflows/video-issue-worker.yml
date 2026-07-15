@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   generate:
-    if: ${{ startsWith(github.event.issue.title, '[video]') }}
+    if: ${{ startsWith(github.event.issue.title, '[video]') && github.event.issue.user.login == github.repository_owner }}
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
