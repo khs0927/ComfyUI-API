@@ -4,9 +4,11 @@ import math
 import os
 import shutil
 import subprocess
+import traceback
 import uuid
+from functools import wraps
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from beam import Image, Output, Volume, task_queue
 
@@ -58,6 +60,20 @@ def _model_path() -> Path:
     return target
 
 
+def _capture_worker_errors(handler: Callable[..., dict[str, Any]]):
+    @wraps(handler)
+    def wrapped(**inputs: Any) -> dict[str, Any]:
+        try:
+            return handler(**inputs)
+        except Exception as exc:
+            error_path = Path("/tmp") / f"beam-{uuid.uuid4().hex}.error.txt"
+            error_path.write_text(traceback.format_exc(), encoding="utf-8")
+            Output(path=str(error_path)).save()
+            return {"error": f"{type(exc).__name__}: {exc}"}
+
+    return wrapped
+
+
 @task_queue(
     name="helios-long-video",
     image=image,
@@ -72,6 +88,7 @@ def _model_path() -> Path:
     authorized=True,
     volumes=[Volume(name="helios-models", mount_path=MODEL_VOLUME)],
 )
+@_capture_worker_errors
 def generate(**inputs: Any) -> dict[str, Any]:
     prompt = str(inputs.get("prompt", "")).strip()
     if not prompt:

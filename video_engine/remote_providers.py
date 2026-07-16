@@ -163,7 +163,25 @@ class BeamHeliosProvider(ClipProvider):
                 status = status_response.json()
                 state = str(status.get("status", "")).upper()
                 if state in {"COMPLETE", "COMPLETED", "SUCCESS"}:
-                    media = _extract_media(status.get("outputs") or status)
+                    outputs = status.get("outputs") or []
+                    error_output = next(
+                        (
+                            item
+                            for item in outputs
+                            if isinstance(item, dict)
+                            and str(item.get("name", "")).endswith(".error.txt")
+                        ),
+                        None,
+                    )
+                    if error_output and error_output.get("url"):
+                        error_response = await client.get(
+                            str(error_output["url"]), headers=headers
+                        )
+                        error_response.raise_for_status()
+                        raise RuntimeError(
+                            "Beam worker failed:\n" + error_response.text.strip()
+                        )
+                    media = _extract_media(outputs or status)
                     if not media or not media.startswith(("http://", "https://")):
                         raise RuntimeError(f"Beam task completed without output URL: {status}")
                     output = workdir / f"scene-{scene.index:05d}.mp4"
