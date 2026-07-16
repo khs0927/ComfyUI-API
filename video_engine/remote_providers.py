@@ -83,7 +83,7 @@ def _read_beam_worker_error(path: Path) -> str | None:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return None
-    if "Traceback (most recent call last)" in text:
+    if "\x00" not in text and text.strip():
         return text.strip()
     return None
 

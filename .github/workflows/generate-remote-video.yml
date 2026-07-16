@@ -169,6 +169,7 @@ jobs:
           path: |
             remote-job.log
             beam-task.log
+            video-data/work/**/*.mp4
           if-no-files-found: ignore
           retention-days: 7
 
