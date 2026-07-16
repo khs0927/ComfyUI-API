@@ -114,6 +114,7 @@ jobs:
 
       - name: Save Beam settings as repository variables
         if: ${{ inputs.deploy_beam && steps.beam.outputs.url != '' }}
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           BEAM_URL: ${{ steps.beam.outputs.url }}

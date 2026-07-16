@@ -1,4 +1,6 @@
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -18,6 +20,19 @@ from video_engine.remote_providers import (
     _extract_task_id,
     _replace_templates,
 )
+
+
+def test_remote_job_script_can_run_directly_from_another_directory(tmp_path: Path):
+    script = Path(__file__).resolve().parents[1] / "scripts" / "run_remote_video_job.py"
+    completed = subprocess.run(
+        [sys.executable, str(script), "--help"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "Run a remote long-video job" in completed.stdout
 
 
 def test_planner_has_no_fixed_final_duration_cap():

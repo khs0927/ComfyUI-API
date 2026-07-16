@@ -8,6 +8,12 @@ import sys
 import time
 from pathlib import Path
 
+# Executing this file directly sets sys.path[0] to scripts/, which otherwise
+# makes the repository's video_engine package unavailable on clean runners.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
 from video_engine import LongVideoOrchestrator, VideoRequest
 
 
