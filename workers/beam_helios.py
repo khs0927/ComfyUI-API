@@ -30,7 +30,15 @@ image = (
                 "git clone --depth=1 https://github.com/PKU-YuanGroup/Helios.git "
                 f"{HELIOS_ROOT} && git -C {HELIOS_ROOT} checkout --detach {HELIOS_REVISION}"
             ),
-            f"cd {HELIOS_ROOT} && pip install -r requirements.txt",
+            # Current Helios pins huggingface-hub to 1.4.1, while its pinned
+            # development Diffusers revision requires >=1.23.0.  Keep the
+            # rest of Helios' upstream requirements unchanged, but replace
+            # that incompatible pin before resolving the image dependencies.
+            (
+                f"cd {HELIOS_ROOT} && "
+                "sed -i 's/huggingface-hub==1\\.4\\.1/huggingface-hub>=1.23.0,<2.0/g' "
+                "requirements.txt && pip install -r requirements.txt"
+            ),
             "pip install 'huggingface_hub[hf_xet]'",
         ]
     )
