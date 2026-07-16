@@ -18,6 +18,7 @@ from video_engine.remote_providers import (
     _configured_candidates,
     _extract_media,
     _extract_task_id,
+    _read_beam_worker_error,
     _replace_templates,
 )
 
@@ -33,6 +34,18 @@ def test_remote_job_script_can_run_directly_from_another_directory(tmp_path: Pat
     )
     assert completed.returncode == 0, completed.stderr
     assert "Run a remote long-video job" in completed.stdout
+
+
+def test_beam_worker_traceback_is_not_treated_as_video(tmp_path: Path):
+    output = tmp_path / "scene.mp4"
+    output.write_text(
+        "Traceback (most recent call last):\nRuntimeError: model failed\n",
+        encoding="utf-8",
+    )
+    assert "RuntimeError: model failed" in (_read_beam_worker_error(output) or "")
+
+    output.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+    assert _read_beam_worker_error(output) is None
 
 
 def test_planner_has_no_fixed_final_duration_cap():

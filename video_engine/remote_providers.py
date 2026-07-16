@@ -76,6 +76,18 @@ def _extract_media(value: Any) -> str | None:
     return None
 
 
+def _read_beam_worker_error(path: Path) -> str | None:
+    if not path.is_file() or path.stat().st_size > 2 * 1024 * 1024:
+        return None
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    if "Traceback (most recent call last)" in text:
+        return text.strip()
+    return None
+
+
 class DailyUsageLedger:
     """Small local guardrail. It limits requested output duration, not provider billing."""
 
@@ -185,7 +197,12 @@ class BeamHeliosProvider(ClipProvider):
                     if not media or not media.startswith(("http://", "https://")):
                         raise RuntimeError(f"Beam task completed without output URL: {status}")
                     output = workdir / f"scene-{scene.index:05d}.mp4"
-                    return await _download(media, output, headers=headers)
+                    await _download(media, output, headers=headers)
+                    worker_error = _read_beam_worker_error(output)
+                    if worker_error:
+                        output.unlink(missing_ok=True)
+                        raise RuntimeError("Beam worker failed:\n" + worker_error)
+                    return output
                 if state in {"FAILED", "ERROR", "CANCELLED", "CANCELED"}:
                     raise RuntimeError(f"Beam task {task_id} ended as {state}: {status}")
                 await asyncio.sleep(self.poll_seconds)
