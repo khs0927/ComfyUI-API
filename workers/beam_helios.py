@@ -77,13 +77,28 @@ def _model_path() -> Path:
 
     target = Path(MODEL_VOLUME) / "models" / "Helios-Distilled"
     marker = target / ".download-complete"
-    if not marker.exists():
+    required_files = (
+        target / "model_index.json",
+        target / "transformer" / "config.json",
+        target / "vae" / "config.json",
+        target / "scheduler" / "scheduler_config.json",
+    )
+    if not marker.exists() or any(not path.is_file() for path in required_files):
+        # A previous interrupted or partial Hub transfer must never be reused:
+        # its completion marker can exist even though component files are absent.
+        shutil.rmtree(target, ignore_errors=True)
         target.mkdir(parents=True, exist_ok=True)
         snapshot_download(
             repo_id=MODEL_ID,
             local_dir=str(target),
             token=os.getenv("HF_TOKEN") or None,
+            force_download=True,
         )
+        missing = [str(path.relative_to(target)) for path in required_files if not path.is_file()]
+        if missing:
+            raise RuntimeError(
+                "Helios model download was incomplete; missing: " + ", ".join(missing)
+            )
         marker.touch()
     return target
 
