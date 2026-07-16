@@ -12,7 +12,6 @@ ProviderName = Literal[
     "hf",
     "helios",
     "wan21",
-    "comfyui",
     "mock",
     "modal",
 ]

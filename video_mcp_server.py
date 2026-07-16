@@ -15,7 +15,7 @@ def _provider_status() -> dict:
     order = [
         item.strip()
         for item in os.getenv(
-            "VIDEO_PROVIDER_ORDER", "beam,kaggle,hf,helios,wan21,comfyui"
+            "VIDEO_PROVIDER_ORDER", "beam,kaggle,hf,helios,wan21"
         ).split(",")
         if item.strip()
     ]
@@ -25,9 +25,6 @@ def _provider_status() -> dict:
         "hf": bool(os.getenv("HF_VIDEO_SPACE_ID")),
         "helios": bool(os.getenv("HELIOS_ROOT")),
         "wan21": bool(os.getenv("WAN21_ROOT")),
-        "comfyui": bool(
-            os.getenv("COMFYUI_URL") and os.getenv("COMFYUI_VIDEO_WORKFLOW")
-        ),
         "modal": os.getenv("MODAL_ENABLED", "false").lower() == "true",
     }
     return {

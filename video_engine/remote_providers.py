@@ -16,7 +16,6 @@ import httpx
 
 from .core import (
     ClipProvider,
-    ComfyUIProvider,
     HeliosProvider,
     LongVideoOrchestrator,
     MockProvider,
@@ -407,17 +406,13 @@ def _configured_candidates() -> list[ProviderCandidate]:
         "hf": (bool(os.getenv("HF_VIDEO_SPACE_ID")), HuggingFaceSpaceProvider),
         "helios": (bool(os.getenv("HELIOS_ROOT")), HeliosProvider),
         "wan21": (bool(os.getenv("WAN21_ROOT")), Wan21Provider),
-        "comfyui": (
-            bool(os.getenv("COMFYUI_URL") and os.getenv("COMFYUI_VIDEO_WORKFLOW")),
-            ComfyUIProvider,
-        ),
         "modal": (os.getenv("MODAL_ENABLED", "false").lower() == "true", ModalReservedProvider),
         "mock": (os.getenv("VIDEO_ALLOW_MOCK", "false").lower() == "true", MockProvider),
     }
     order = [
         item.strip().lower()
         for item in os.getenv(
-            "VIDEO_PROVIDER_ORDER", "beam,kaggle,hf,helios,wan21,comfyui"
+            "VIDEO_PROVIDER_ORDER", "beam,kaggle,hf,helios,wan21"
         ).split(",")
         if item.strip()
     ]

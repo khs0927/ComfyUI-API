@@ -47,7 +47,6 @@ def test_free_cloud_local_and_reserved_provider_values_are_accepted():
         "hf",
         "helios",
         "wan21",
-        "comfyui",
         "mock",
         "modal",
     )

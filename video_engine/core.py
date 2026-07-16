@@ -16,7 +16,7 @@ from typing import Any, Literal
 import httpx
 from pydantic import BaseModel, Field, model_validator
 
-ProviderName = Literal["auto", "helios", "wan21", "comfyui", "mock"]
+ProviderName = Literal["auto", "helios", "wan21", "mock"]
 JobState = Literal[
     "queued",
     "planning",
@@ -431,111 +431,6 @@ class MockProvider(LocalProvider):
         return output
 
 
-class ComfyUIProvider(ClipProvider):
-    """Run a fully local open-source Wan/Helios workflow through ComfyUI."""
-
-    def __init__(self) -> None:
-        self.base_url = os.getenv(
-            "COMFYUI_URL", "http://127.0.0.1:8188"
-        ).rstrip("/")
-        self.workflow_path = Path(
-            os.getenv(
-                "COMFYUI_VIDEO_WORKFLOW", "workflows/wan21_t2v_api.json"
-            )
-        )
-        self.timeout = float(os.getenv("COMFYUI_SCENE_TIMEOUT", "7200"))
-
-    @staticmethod
-    def replace_tokens(value: Any, tokens: dict[str, Any]) -> Any:
-        if isinstance(value, dict):
-            return {
-                key: ComfyUIProvider.replace_tokens(item, tokens)
-                for key, item in value.items()
-            }
-        if isinstance(value, list):
-            return [ComfyUIProvider.replace_tokens(item, tokens) for item in value]
-        if isinstance(value, str):
-            if value in tokens:
-                return tokens[value]
-            for token, replacement in tokens.items():
-                value = value.replace(token, str(replacement))
-        return value
-
-    async def generate(
-        self, scene: ScenePlan, request: VideoRequest, workdir: Path
-    ) -> Path:
-        if not self.workflow_path.exists():
-            raise RuntimeError(f"ComfyUI workflow not found: {self.workflow_path}")
-        workflow = json.loads(self.workflow_path.read_text(encoding="utf-8"))
-        workflow = self.replace_tokens(
-            workflow,
-            {
-                "{{PROMPT}}": scene.visual_prompt,
-                "{{NEGATIVE_PROMPT}}": request.negative_prompt,
-                "{{WIDTH}}": request.width,
-                "{{HEIGHT}}": request.height,
-                "{{FPS}}": request.fps,
-                "{{DURATION_SECONDS}}": scene.duration_seconds,
-                "{{FRAME_COUNT}}": scene.duration_seconds * request.fps + 1,
-                "{{SEED}}": scene.seed,
-            },
-        )
-        async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(
-                f"{self.base_url}/prompt",
-                json={"prompt": workflow, "client_id": str(uuid.uuid4())},
-            )
-            response.raise_for_status()
-            prompt_id = response.json()["prompt_id"]
-            deadline = time.monotonic() + self.timeout
-            while time.monotonic() < deadline:
-                history_response = await client.get(
-                    f"{self.base_url}/history/{prompt_id}"
-                )
-                history_response.raise_for_status()
-                history = history_response.json().get(prompt_id)
-                if history:
-                    output = await self._read_output(client, history, scene, workdir)
-                    if output:
-                        return output
-                    status = history.get("status", {})
-                    if status.get("status_str") == "error":
-                        raise RuntimeError(f"ComfyUI generation failed: {status}")
-                await asyncio.sleep(2)
-        raise TimeoutError(f"ComfyUI scene timed out after {self.timeout}s")
-
-    async def _read_output(
-        self,
-        client: httpx.AsyncClient,
-        history: dict[str, Any],
-        scene: ScenePlan,
-        workdir: Path,
-    ) -> Path | None:
-        for node in history.get("outputs", {}).values():
-            files = (
-                node.get("videos")
-                or node.get("gifs")
-                or node.get("images")
-                or []
-            )
-            for item in files:
-                filename = item.get("filename", "")
-                if not filename.lower().endswith((".mp4", ".webm", ".mov", ".gif")):
-                    continue
-                media = await client.get(
-                    f"{self.base_url}/view",
-                    params={
-                        "filename": filename,
-                        "subfolder": item.get("subfolder", ""),
-                        "type": item.get("type", "output"),
-                    },
-                )
-                media.raise_for_status()
-                suffix = Path(filename).suffix or ".mp4"
-                output = workdir / f"scene-{scene.index:05d}{suffix}"
-                output.write_bytes(media.content)
-                return output
-        return None
 
 
 class FFmpegRenderer:
@@ -641,16 +536,12 @@ class LongVideoOrchestrator:
                 return HeliosProvider()
             if os.getenv("WAN21_ROOT"):
                 return Wan21Provider()
-            if os.getenv("COMFYUI_URL") and os.getenv("COMFYUI_VIDEO_WORKFLOW"):
-                return ComfyUIProvider()
             raise RuntimeError(
-                "No free local generator configured. Set HELIOS_ROOT, WAN21_ROOT, "
-                "or COMFYUI_URL + COMFYUI_VIDEO_WORKFLOW."
+                "No free local generator configured. Set HELIOS_ROOT or WAN21_ROOT."
             )
         providers: dict[str, type[ClipProvider]] = {
             "helios": HeliosProvider,
             "wan21": Wan21Provider,
-            "comfyui": ComfyUIProvider,
             "mock": MockProvider,
         }
         return providers[name]()
