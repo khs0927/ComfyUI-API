@@ -39,6 +39,22 @@ image = (
                 "sed -i 's/huggingface-hub==1\\.4\\.1/huggingface-hub>=1.23.0,<2.0/g' "
                 "requirements.txt && pip install -r requirements.txt"
             ),
+            # Helios' Diffusers development revision does not consistently
+            # honor ``subfolder=`` for local directories.  Point each loader
+            # directly at the model component directory instead.
+            (
+                f"sed -i "
+                "'/HeliosTransformer3DModel.from_pretrained(/,/torch_dtype=/ { "
+                "s/args.transformer_path,/os.path.join(args.transformer_path, \"transformer\"),/; "
+                "/subfolder=\"transformer\",/d; }; "
+                "/AutoencoderKLWan.from_pretrained(/,/torch_dtype=/ { "
+                "s/args.base_model_path,/os.path.join(args.base_model_path, \"vae\"),/; "
+                "/subfolder=\"vae\",/d; }; "
+                "/HeliosScheduler.from_pretrained(/,/)/ { "
+                "s/args.base_model_path,/os.path.join(args.base_model_path, \"scheduler\"),/; "
+                "/subfolder=\"scheduler\",/d; }' "
+                f"{HELIOS_ROOT}/infer_helios.py"
+            ),
             "pip install 'huggingface_hub[hf_xet]'",
         ]
     )
