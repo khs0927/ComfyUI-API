@@ -80,8 +80,15 @@ def _read_beam_worker_error(path: Path) -> str | None:
     if not path.is_file() or path.stat().st_size > 2 * 1024 * 1024:
         return None
     try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
+        data = path.read_bytes()
+    except OSError:
+        return None
+    marker = data.find(b"Traceback")
+    if marker >= 0:
+        return data[marker:].decode("utf-8", errors="replace").replace("\x00", "").strip()
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
         return None
     if "\x00" not in text and text.strip():
         return text.strip()

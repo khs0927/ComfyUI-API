@@ -47,6 +47,9 @@ def test_beam_worker_traceback_is_not_treated_as_video(tmp_path: Path):
     output.write_text("worker failed before traceback formatting", encoding="utf-8")
     assert _read_beam_worker_error(output) == "worker failed before traceback formatting"
 
+    output.write_bytes(b"\x00\xffbinary-prefix\x00Traceback: wrapped worker failure")
+    assert _read_beam_worker_error(output) == "Traceback: wrapped worker failure"
+
     output.write_bytes(b"\x00\x00\x00\x18ftypmp42")
     assert _read_beam_worker_error(output) is None
 

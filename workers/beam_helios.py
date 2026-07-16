@@ -154,12 +154,22 @@ def generate(**inputs: Any) -> dict[str, Any]:
 
     environment = os.environ.copy()
     environment["HF_HOME"] = str(Path(MODEL_VOLUME) / "hf-cache")
-    subprocess.run(
+    inference = subprocess.run(
         command,
         cwd=str(infer_script.parent),
         env=environment,
-        check=True,
+        capture_output=True,
+        text=True,
+        check=False,
     )
+    if inference.returncode != 0:
+        stdout_tail = (inference.stdout or "")[-12000:]
+        stderr_tail = (inference.stderr or "")[-12000:]
+        raise RuntimeError(
+            "Helios inference failed with exit code "
+            f"{inference.returncode}.\n--- stdout (tail) ---\n{stdout_tail}"
+            f"\n--- stderr (tail) ---\n{stderr_tail}"
+        )
 
     raw = _newest_video(raw_dir)
     final = task_root / "scene.mp4"
