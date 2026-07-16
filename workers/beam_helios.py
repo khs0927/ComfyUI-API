@@ -15,6 +15,7 @@ from beam import Image, Output, Volume, task_queue
 
 MODEL_VOLUME = "/volumes/helios"
 HELIOS_ROOT = "/workspace/Helios"
+HELIOS_REVISION = "8f2a2faab3298c8a7630a2c73aea37c01b5bab01"
 MODEL_ID = os.getenv("HELIOS_MODEL", "BestWishYsh/Helios-Distilled")
 
 image = (
@@ -25,7 +26,10 @@ image = (
                 "apt-get update -y && apt-get install -y git ffmpeg libgl1 "
                 "libglib2.0-0 libopenmpi-dev"
             ),
-            f"git clone --depth=1 https://github.com/PKU-YuanGroup/Helios.git {HELIOS_ROOT}",
+            (
+                "git clone --depth=1 https://github.com/PKU-YuanGroup/Helios.git "
+                f"{HELIOS_ROOT} && git -C {HELIOS_ROOT} checkout --detach {HELIOS_REVISION}"
+            ),
             f"cd {HELIOS_ROOT} && pip install -r requirements.txt",
             "pip install 'huggingface_hub[hf_xet]'",
         ]
