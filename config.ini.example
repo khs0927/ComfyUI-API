@@ -1,0 +1,3 @@
+# Copy to config.ini and fill in your key. Never commit config.ini.
+[falai]
+api_key = your_api_key_here

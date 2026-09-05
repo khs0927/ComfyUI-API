@@ -38,11 +38,11 @@ There are two ways to install ComfyUI-Fal-API-Flux:
 1. Clone this repository into your ComfyUI's `custom_nodes` directory:
    ```
    cd /path/to/ComfyUI/custom_nodes
-   git clone https://github.com/your-username/ComfyUI-Fal-API-Flux.git
+   git clone https://github.com/khs0927/ComfyUI-API.git
    ```
 2. Navigate to the cloned directory:
    ```
-   cd ComfyUI-Fal-API-Flux
+   cd ComfyUI-API
    ```
 3. Install the required dependencies:
    ```
