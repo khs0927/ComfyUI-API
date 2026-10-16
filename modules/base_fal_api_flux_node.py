@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 class BaseFalAPIFluxNode:
     def __init__(self):
         self.api_key = self.get_api_key()
-        os.environ['FAL_KEY'] = self.api_key
+        if self.api_key:
+            os.environ['FAL_KEY'] = self.api_key
         self.api_endpoint = None
 
     def get_api_key(self):

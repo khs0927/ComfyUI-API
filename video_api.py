@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import os
 from dataclasses import asdict
 from pathlib import Path
@@ -22,7 +23,13 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[item.strip() for item in os.getenv("CORS_ORIGINS", "*").split(",")],
+    allow_origins=[
+        item.strip()
+        for item in os.getenv(
+            "CORS_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000"
+        ).split(",")
+        if item.strip()
+    ],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,11 +50,22 @@ async def serve_dashboard():
 
 
 def authorize(authorization: str | None) -> None:
+    """Fail closed: every protected endpoint needs VIDEO_API_TOKEN to be set.
+
+    For purely local experiments you can opt out explicitly with
+    VIDEO_API_ALLOW_UNAUTHENTICATED=1.
+    """
     expected = os.getenv("VIDEO_API_TOKEN")
     if not expected:
-        return
+        if os.getenv("VIDEO_API_ALLOW_UNAUTHENTICATED") == "1":
+            return
+        raise HTTPException(
+            status_code=503, detail="VIDEO_API_TOKEN is not configured on the server"
+        )
     supplied = (authorization or "").removeprefix("Bearer ").strip()
-    if supplied != expected:
+    if not supplied or not hmac.compare_digest(
+        supplied.encode("utf-8"), expected.encode("utf-8")
+    ):
         raise HTTPException(status_code=401, detail="Invalid bearer token")
 
 
